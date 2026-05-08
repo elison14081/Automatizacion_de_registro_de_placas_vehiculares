@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cobro y Pago - Sistema de Parkeo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <style>
+    body {
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 30px;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #2196F3;
+    }
+    .header h2 {
+      color: #2196F3;
+      font-size: 32px;
+      margin: 0;
+    }
+    .opciones-escaneo {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      margin: 30px 0;
+    }
+    .opcion-card {
+      background: #f9f9f9;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      padding: 25px;
+      width: 220px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .opcion-card:hover {
+      border-color: #2196F3;
+      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
+    }
+    .opcion-card.active {
+      border-color: #2196F3;
+      background: #e3f2fd;
+    }
+    .opcion-icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+    .metodo-container {
+      display: none;
+      margin-top: 30px;
+    }
+    .metodo-container.active {
+      display: block;
+    }
+    #qr-reader {
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+      border: 3px solid #2196F3;
+      border-radius: 10px;
+      overflow: hidden;
+      display: none;
+      min-height: 300px; /* Altura mínima */
+    }
+    
+    #qr-reader.active {
+      display: block;
+    }
+    
+    /* Estilos para elementos internos de html5-qrcode */
+    #qr-reader video {
+      width: 100% !important;
+      border-radius: 8px;
+    }
+    
+    #qr-reader__dashboard {
+      background: white !important;
+    }
+    
+    #qr-reader__scan_region {
+      min-height: 300px !important;
+    }
+    .manual-input {
+      max-width: 500px;
+      margin: 20px auto;
+    }
+    .form-group {
+      margin: 20px 0;
+    }
+    .form-group label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    .info-vehiculo {
+      display: none;
+      background: #e8f5e9;
+      border: 2px solid #4CAF50;
+      border-radius: 10px;
+      padding: 30px;
+      margin: 30px 0;
+    }
+    .info-vehiculo.show {
+      display: block;
+    }
+    .placa-display {
+      font-size: 42px;
+      font-weight: bold;
+      text-align: center;
+      color: #2196F3;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      letter-spacing: 5px;
+      margin: 20px 0;
+      border: 3px solid #2196F3;
+    }
+    .detalles-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 20px 0;
+    }
+    .detalle-item {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #2196F3;
+    }
+    .detalle-item strong {
+      display: block;
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+    .detalle-item span {
+      display: block;
+      color: #333;
+      font-size: 20px;
+      font-weight: bold;
+    }
+    .costo-total {
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 10px;
+      text-align: center;
+      margin: 30px 0;
+    }
+    .costo-total h3 {
+      margin: 0;
+      font-size: 24px;
+    }
+    .costo-total .monto {
+      font-size: 56px;
+      font-weight: bold;
+      margin: 15px 0;
+    }
+    .estado-pago {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+    .estado-pendiente {
+      background: #fff3cd;
+      color: #856404;
+      border: 2px solid #ffc107;
+    }
+    .estado-pagado {
+      background: #d4edda;
+      color: #155724;
+      border: 2px solid #28a745;
+    }
+    .acciones-pago {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 30px;
+      border-top: 2px solid #f0f0f0;
+    }
+    .btn {
+      padding: 15px 30px;
+      border: none;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 10px;
+      transition: all 0.3s;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #45a049;
+    }
+    .btn-primary:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .btn-secondary {
+      background: #757575;
+      color: white;
+    }
+    .btn-secondary:hover {
+      background: #616161;
+    }
+    .btn-volver {
+      background: #2196F3;
+      color: white;
+    }
+    .btn-volver:hover {
+      background: #0b7dda;
+    }
+    .alert {
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+      display: none;
+    }
+    .alert.show {
+      display: block;
+    }
+    .alert-success {
+      background: #d4edda;
+      color: #155724;
+      border: 2px solid #c3e6cb;
+    }
+    .alert-error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 2px solid #f5c6cb;
+    }
+    .alert-warning {
+      background: #fff3cd;
+      color: #856404;
+      border: 2px solid #ffeeba;
+    }
+    #scanner-result {
+      margin-top: 15px;
+      font-size: 16px;
+      min-height: 30px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>💳 Cobro y Pago de Estacionamiento</h2>
+      <p>Escanea el QR del cliente o ingresa los datos manualmente</p>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 20px;">
+      <a href="{{ url_for('main.index') }}" class="btn btn-volver">← Volver al Inicio</a>
+    </div>
+
+    <!-- Opciones de búsqueda -->
+    <div class="opciones-escaneo">
+      <div class="opcion-card active" id="opcion-qr">
+        <div class="opcion-icon">📷</div>
+        <h3>Escanear QR</h3>
+        <p>Usando cámara</p>
+      </div>
+      <div class="opcion-card" id="opcion-manual">
+        <div class="opcion-icon">⌨️</div>
+        <h3>Ingreso Manual</h3>
+        <p>Token o Placa</p>
+      </div>
+    </div>
+
+    <!-- Método 1: Escanear QR -->
+    <div id="metodo-qr" class="metodo-container active">
+      <h3 style="text-align: center;">Escanear Código QR del Cliente</h3>
+      <div class="qr-scanner-container">
+        <!-- Contenedor del escáner -->
+        <div id="qr-reader"></div>
+        <div id="scanner-result"></div>
+        <div style="margin-top: 20px;">
+          <button id="start-scanner" class="btn btn-primary">Iniciar Escáner</button>
+          <button id="stop-scanner" class="btn btn-secondary" style="display: none;">Detener Escáner</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Método 2: Ingreso Manual -->
+    <div id="metodo-manual" class="metodo-container">
+      <h3 style="text-align: center;">Buscar por Token o Placa</h3>
+      <div class="manual-input">
+        <div class="form-group">
+          <label for="buscar-token">🔑 Token del Vehículo:</label>
+          <input 
+            type="text" 
+            id="buscar-token" 
+            placeholder="Ejemplo: a1b2c3d4e5f6g7h8"
+            maxlength="32"
+          >
+        </div>
+        <div style="text-align: center; margin: 20px 0;">
+          <strong>- O -</strong>
+        </div>
+        <div class="form-group">
+          <label for="buscar-placa">🚗 Placa del Vehículo:</label>
+          <input 
+            type="text" 
+            id="buscar-placa" 
+            placeholder="Ejemplo: ABC123"
+            maxlength="10"
+            style="text-transform: uppercase;"
+          >
+        </div>
+        <div style="text-align: center; margin-top: 20px;">
+          <button id="buscar-manual" class="btn btn-primary">Buscar Vehículo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alertas -->
+    <div id="alert-container"></div>
+
+    <!-- Información del vehículo -->
+    <div class="info-vehiculo" id="info-vehiculo">
+      <h3 style="text-align: center; color: #2196F3; margin-bottom: 20px;">
+        📋 Información del Vehículo
+      </h3>
+
+      <div class="placa-display" id="placa-display"></div>
+
+      <div class="detalles-grid">
+        <div class="detalle-item">
+          <strong>🎫 Token</strong>
+          <span id="token-display">-</span>
+        </div>
+        <div class="detalle-item">
+          <strong>🕐 Hora de Entrada</strong>
+          <span id="entrada-display">-</span>
+        </div>
+        <div class="detalle-item">
+          <strong>⏱️ Tiempo Transcurrido</strong>
+          <span id="tiempo-display">-</span>
+        </div>
+        <div class="detalle-item">
+          <strong>📱 Teléfono</strong>
+          <span id="telefono-display">-</span>
+        </div>
+      </div>
+
+      <div class="costo-total">
+        <h3>💰 Total a Pagar</h3>
+        <div class="monto" id="monto-display">S/ 0.00</div>
+        <div class="estado-pago" id="estado-pago">PENDIENTE</div>
+      </div>
+
+      <div class="acciones-pago">
+        <button id="btn-confirmar-pago" class="btn btn-primary" style="font-size: 22px; padding: 20px 40px;">
+          ✅ CONFIRMAR PAGO
+        </button>
+        <button id="btn-cancelar" class="btn btn-secondary">
+          ❌ Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    let html5QrCode = null;
+    let scannerActivo = false;
+    let movimientoActual = null;
+
+    // Cambiar entre métodos
+    document.getElementById('opcion-qr').onclick = () => activarMetodo('qr');
+    document.getElementById('opcion-manual').onclick = () => activarMetodo('manual');
+
+    function activarMetodo(metodo) {
+      document.querySelectorAll('.opcion-card').forEach(card => card.classList.remove('active'));
+      document.querySelectorAll('.metodo-container').forEach(container => container.classList.remove('active'));
+      
+      if (metodo === 'qr') {
+        document.getElementById('opcion-qr').classList.add('active');
+        document.getElementById('metodo-qr').classList.add('active');
+        detenerScanner();
+      } else {
+        document.getElementById('opcion-manual').classList.add('active');
+        document.getElementById('metodo-manual').classList.add('active');
+        detenerScanner();
+      }
+      
+      ocultarInfo();
+    }
+
+    // Escáner QR
+    document.getElementById('start-scanner').onclick = iniciarScanner;
+    document.getElementById('stop-scanner').onclick = detenerScanner;
+
+  function iniciarScanner() {
+    const resultContainer = document.getElementById('scanner-result');
+    const qrReaderDiv = document.getElementById('qr-reader');
+    
+    // Verificar soporte del navegador
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      mostrarAlerta('error', '❌ Tu navegador no soporta acceso a cámara.');
+      resultContainer.innerHTML = `
+        <div style="color: red; padding: 15px; background: #ffebee; border-radius: 8px; margin-top: 15px;">
+          <strong>⚠️ Cámara no disponible</strong><br>
+          Tu navegador no permite acceso a la cámara.<br>
+          <small>Usa Chrome, Firefox o Edge en <strong>localhost</strong></small>
+        </div>
+      `;
+      return;
+    }
+
+    resultContainer.innerHTML = '<div style="color: #2196F3; font-weight: bold;">🔄 Solicitando acceso a la cámara...</div>';
+    
+    // Mostrar el contenedor antes de iniciar
+    qrReaderDiv.classList.add('active');
+    
+    // Crear instancia del escáner
+    html5QrCode = new Html5Qrcode("qr-reader");
+    
+    // Configuración del escáner con más opciones
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0,
+      disableFlip: false,
+      videoConstraints: {
+        facingMode: "environment"
+      }
+    };
+
+    // Obtener cámaras disponibles primero
+    Html5Qrcode.getCameras()
+      .then(cameras => {
+        if (!cameras || cameras.length === 0) {
+          throw new Error('No se encontraron cámaras disponibles');
+        }
+        
+        console.log('Cámaras encontradas:', cameras.length);
+        
+        // Usar la primera cámara disponible (o la trasera si está disponible)
+        let selectedCamera = cameras[0].id;
+        
+        // Intentar encontrar la cámara trasera
+        const backCamera = cameras.find(camera => 
+          camera.label.toLowerCase().includes('back') || 
+          camera.label.toLowerCase().includes('rear') ||
+          camera.label.toLowerCase().includes('trasera')
+        );
+        
+        if (backCamera) {
+          selectedCamera = backCamera.id;
+          console.log('Usando cámara trasera:', backCamera.label);
+        } else {
+          console.log('Usando cámara:', cameras[0].label);
+        }
+
+        // Iniciar escáner con la cámara seleccionada
+        return html5QrCode.start(
+          selectedCamera,
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+          },
+          onScanSuccess,
+          onScanError
+        );
+      })
+      .then(() => {
+        scannerActivo = true;
+        document.getElementById('start-scanner').style.display = 'none';
+        document.getElementById('stop-scanner').style.display = 'inline-block';
+        resultContainer.innerHTML = '<div style="color: green; font-weight: bold;">📷 Escáner activo - Acerca el código QR a la cámara</div>';
+      })
+      .catch(err => {
+        console.error('Error completo:', err);
+        
+        // Ocultar el contenedor si hay error
+        qrReaderDiv.classList.remove('active');
+        
+        let mensajeError = err.toString();
+        let solucion = '';
+        
+        if (mensajeError.includes('Permission denied') || mensajeError.includes('NotAllowedError')) {
+          solucion = `
+            <strong>🚫 Permiso de cámara denegado</strong><br><br>
+            <strong>Para permitir el acceso:</strong><br>
+            1. Haz clic en el ícono 🔒 o 🎥 en la barra de direcciones<br>
+            2. Permite el acceso a la cámara<br>
+            3. Recarga la página (F5)<br>
+            4. Accede usando: <strong>http://localhost:5000</strong>
+          `;
+        } else if (mensajeError.includes('NotFoundError') || mensajeError.includes('No se encontraron cámaras')) {
+          solucion = `
+            <strong>📷 No se detectó ninguna cámara</strong><br><br>
+            Verifica que tu dispositivo tenga una cámara conectada y funcionando.
+          `;
+        } else if (mensajeError.includes('NotReadableError') || mensajeError.includes('Could not start video source')) {
+          solucion = `
+            <strong>⚠️ Cámara en uso</strong><br><br>
+            La cámara está siendo usada por otra aplicación.<br>
+            Cierra otras aplicaciones que puedan estar usando la cámara.
+          `;
+        } else {
+          solucion = `
+            <strong>❌ Error al iniciar la cámara</strong><br>
+            ${mensajeError}<br><br>
+            <strong>Soluciones:</strong><br>
+            1. Usa <strong>http://localhost:5000</strong> en lugar de 127.0.0.1<br>
+            2. Otorga permisos de cámara en la configuración del navegador<br>
+            3. Cierra otras aplicaciones que usen la cámara<br>
+            4. Prueba con otro navegador (Chrome recomendado)<br>
+            5. Usa el método "Ingreso Manual"
+          `;
+        }
+        
+        mostrarAlerta('error', 'No se pudo iniciar la cámara');
+        resultContainer.innerHTML = `
+          <div style="color: red; padding: 20px; background: #ffebee; border-radius: 8px; margin-top: 15px; text-align: left;">
+            ${solucion}
+          </div>
+        `;
+        
+        html5QrCode = null;
+      });
+  }
+
+    function detenerScanner() {
+      if (scannerActivo && html5QrCode) {
+        html5QrCode.stop()
+          .then(() => {
+            scannerActivo = false;
+            document.getElementById('qr-reader').classList.remove('active');
+            document.getElementById('start-scanner').style.display = 'inline-block';
+            document.getElementById('stop-scanner').style.display = 'none';
+            document.getElementById('scanner-result').innerHTML = '';
+            html5QrCode = null;
+          })
+          .catch(err => {
+            console.error('Error al detener escáner:', err);
+          });
+      }
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+      console.log('QR escaneado:', decodedText);
+      document.getElementById('scanner-result').innerHTML = '<div style="color: green; font-weight: bold;">✅ QR detectado, procesando...</div>';
+      
+      // Detener scanner
+      detenerScanner();
+      
+      // Procesar QR
+      try {
+        const data = JSON.parse(decodedText);
+        if (data.token) {
+          buscarPorToken(data.token);
+        } else if (data.placa) {
+          buscarPorPlaca(data.placa);
+        } else {
+          buscarPorToken(decodedText);
+        }
+      } catch (e) {
+        // Si no es JSON, asumir que es el token directamente
+        buscarPorToken(decodedText);
+      }
+    }
+
+    function onScanError(errorMessage) {
+      // Ignorar errores de escaneo continuo
+    }
+
+    // Búsqueda manual
+    document.getElementById('buscar-manual').onclick = () => {
+      const token = document.getElementById('buscar-token').value.trim();
+      const placa = document.getElementById('buscar-placa').value.trim().toUpperCase();
+      
+      if (token) {
+        buscarPorToken(token);
+      } else if (placa) {
+        buscarPorPlaca(placa);
+      } else {
+        mostrarAlerta('warning', 'Debe ingresar un token o una placa');
+      }
+    };
+
+    // Buscar con Enter
+    document.getElementById('buscar-token').onkeypress = (e) => {
+      if (e.key === 'Enter') {
+        const token = e.target.value.trim();
+        if (token) buscarPorToken(token);
+      }
+    };
+
+    document.getElementById('buscar-placa').onkeypress = (e) => {
+      if (e.key === 'Enter') {
+        const placa = e.target.value.trim().toUpperCase();
+        if (placa) buscarPorPlaca(placa);
+      }
+    };
+
+    // Funciones de búsqueda
+    function buscarPorToken(token) {
+      fetch('/buscar-movimiento-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token })
+      })
+      .then(resp => resp.json())
+      .then(data => {
+        if (data.error) {
+          mostrarAlerta('error', data.error);
+          ocultarInfo();
+        } else {
+          mostrarInfoVehiculo(data);
+        }
+      })
+      .catch(error => {
+        mostrarAlerta('error', 'Error al buscar: ' + error);
+      });
+    }
+
+    function buscarPorPlaca(placa) {
+      fetch('/buscar-movimiento-placa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placa: placa })
+      })
+      .then(resp => resp.json())
+      .then(data => {
+        if (data.error) {
+          mostrarAlerta('error', data.error);
+          ocultarInfo();
+        } else {
+          mostrarInfoVehiculo(data);
+        }
+      })
+      .catch(error => {
+        mostrarAlerta('error', 'Error al buscar: ' + error);
+      });
+    }
+
+    // Mostrar información
+    function mostrarInfoVehiculo(data) {
+      movimientoActual = data;
+      
+      document.getElementById('placa-display').textContent = data.placa;
+      document.getElementById('token-display').textContent = data.token;
+      document.getElementById('entrada-display').textContent = data.hora_entrada;
+      document.getElementById('tiempo-display').textContent = data.tiempo_transcurrido;
+      document.getElementById('telefono-display').textContent = data.telefono || 'No registrado';
+      document.getElementById('monto-display').textContent = `S/ ${parseFloat(data.monto).toFixed(2)}`;
+      
+      const estadoPago = document.getElementById('estado-pago');
+      const btnPago = document.getElementById('btn-confirmar-pago');
+      
+      if (data.pagado) {
+        estadoPago.textContent = '✅ PAGADO';
+        estadoPago.className = 'estado-pago estado-pagado';
+        btnPago.disabled = true;
+        btnPago.textContent = '✅ YA PAGADO';
+        mostrarAlerta('success', 'Este vehículo ya ha pagado. Puede proceder a la salida.');
+      } else {
+        estadoPago.textContent = '⏳ PENDIENTE DE PAGO';
+        estadoPago.className = 'estado-pago estado-pendiente';
+        btnPago.disabled = false;
+        btnPago.textContent = '✅ CONFIRMAR PAGO';
+      }
+      
+      document.getElementById('info-vehiculo').classList.add('show');
+      document.getElementById('info-vehiculo').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function ocultarInfo() {
+      document.getElementById('info-vehiculo').classList.remove('show');
+      movimientoActual = null;
+    }
+
+    // Confirmar pago
+    document.getElementById('btn-confirmar-pago').onclick = () => {
+      if (!movimientoActual) return;
+      
+      if (confirm(`¿Confirmar pago de S/ ${parseFloat(movimientoActual.monto).toFixed(2)} para la placa ${movimientoActual.placa}?`)) {
+        const btn = document.getElementById('btn-confirmar-pago');
+        btn.disabled = true;
+        btn.textContent = 'Procesando...';
+        
+        fetch('/confirmar-pago', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ movimiento_id: movimientoActual.id })
+        })
+        .then(resp => resp.json())
+        .then(data => {
+          if (data.success) {
+            mostrarAlerta('success', '✅ Pago confirmado exitosamente.');
+            
+            document.getElementById('estado-pago').textContent = '✅ PAGADO';
+            document.getElementById('estado-pago').className = 'estado-pago estado-pagado';
+            btn.textContent = '✅ PAGADO';
+            
+            setTimeout(() => {
+              ocultarInfo();
+              limpiarFormularios();
+            }, 3000);
+          } else {
+            mostrarAlerta('error', data.error || 'Error al confirmar pago');
+            btn.disabled = false;
+            btn.textContent = '✅ CONFIRMAR PAGO';
+          }
+        });
+      }
+    };
+
+    document.getElementById('btn-cancelar').onclick = () => {
+      ocultarInfo();
+      limpiarFormularios();
+    };
+
+    function limpiarFormularios() {
+      document.getElementById('buscar-token').value = '';
+      document.getElementById('buscar-placa').value = '';
+    }
+
+    function mostrarAlerta(tipo, mensaje) {
+      const container = document.getElementById('alert-container');
+      const alert = document.createElement('div');
+      alert.className = `alert alert-${tipo} show`;
+      alert.textContent = mensaje;
+      
+      container.innerHTML = '';
+      container.appendChild(alert);
+      
+      setTimeout(() => {
+        alert.classList.remove('show');
+        setTimeout(() => alert.remove(), 300);
+      }, 5000);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entrada Registrada - Sistema de Parkeo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <style>
+    body {
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .confirmacion-container {
+      max-width: 700px;
+      margin: 20px auto;
+      padding: 40px;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .check-icon {
+      font-size: 80px;
+      color: #4CAF50;
+      margin-bottom: 20px;
+      animation: checkmark 0.5s ease-in-out;
+    }
+    @keyframes checkmark {
+      0% { transform: scale(0); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+    .titulo-confirmacion {
+      color: #4CAF50;
+      font-size: 28px;
+      margin-bottom: 30px;
+    }
+    .placa-display {
+      font-size: 36px;
+      font-weight: bold;
+      color: #333;
+      background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+      padding: 20px;
+      border-radius: 10px;
+      margin: 20px 0;
+      letter-spacing: 5px;
+      border: 3px solid #4CAF50;
+    }
+    .info-box {
+      background: #e3f2fd;
+      padding: 20px;
+      border-radius: 10px;
+      margin: 25px 0;
+      text-align: left;
+      border-left: 4px solid #2196F3;
+    }
+    .info-box p {
+      margin: 10px 0;
+      font-size: 16px;
+    }
+    .info-box strong {
+      color: #1976D2;
+    }
+    .qr-container {
+      margin: 30px 0;
+      padding: 30px;
+      background: linear-gradient(135deg, #f9f9f9 0%, #ffffff 100%);
+      border-radius: 15px;
+      border: 2px dashed #4CAF50;
+    }
+    .qr-titulo {
+      font-size: 22px;
+      color: #333;
+      margin-bottom: 15px;
+      font-weight: bold;
+    }
+    .qr-instruccion {
+      color: #666;
+      font-size: 15px;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    .qr-image {
+      max-width: 350px;
+      margin: 20px auto;
+      display: block;
+      padding: 15px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .whatsapp-status {
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin: 25px 0;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .whatsapp-success {
+      background: #d4edda;
+      color: #155724;
+      border: 2px solid #c3e6cb;
+    }
+    .whatsapp-error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 2px solid #f5c6cb;
+    }
+    .whatsapp-dev {
+      background: #fff3cd;
+      color: #856404;
+      border: 2px solid #ffeaa7;
+    }
+    .whatsapp-icon {
+      font-size: 24px;
+    }
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+      padding: 15px 30px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      margin: 10px;
+      transition: all 0.3s;
+      font-weight: bold;
+    }
+    .btn-primary:hover {
+      background: #45a049;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    }
+    .btn-download {
+      background: #2196F3;
+    }
+    .btn-download:hover {
+      background: #0b7dda;
+      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+    }
+    .btn-print {
+      background: #FF9800;
+    }
+    .btn-print:hover {
+      background: #F57C00;
+      box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+    }
+    .acciones-container {
+      margin-top: 30px;
+      padding-top: 30px;
+      border-top: 2px solid #f0f0f0;
+    }
+    .token-info {
+      font-family: 'Courier New', monospace;
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      color: #666;
+    }
+    @media print {
+      .btn-primary, .acciones-container {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="confirmacion-container">
+    <div class="check-icon">✓</div>
+    <h2 class="titulo-confirmacion">¡Entrada Registrada Exitosamente!</h2>
+    
+    <div class="placa-display">{{ movimiento.placa }}</div>
+    
+    <div class="info-box">
+      <p><strong>🎫 Token:</strong> <span class="token-info">{{ movimiento.token }}</span></p>
+      <p><strong>🕐 Hora de entrada:</strong> {{ movimiento.hora_entrada.strftime('%d/%m/%Y %H:%M:%S') }}</p>
+      {% if movimiento.numero_telefono %}
+      <p><strong>📱 Teléfono:</strong> {{ movimiento.numero_telefono }}</p>
+      {% endif %}
+    </div>
+
+    {% if movimiento.numero_telefono %}
+    <div class="whatsapp-status {% if envio_whatsapp.success %}whatsapp-success{% elif envio_whatsapp.dev_mode %}whatsapp-dev{% else %}whatsapp-error{% endif %}">
+      <span class="whatsapp-icon">
+        {% if envio_whatsapp.success %}
+          ✅
+        {% elif envio_whatsapp.dev_mode %}
+          ℹ️
+        {% else %}
+          ❌
+        {% endif %}
+      </span>
+      <span>
+        {% if envio_whatsapp.success %}
+          QR enviado exitosamente por WhatsApp al número {{ movimiento.numero_telefono }}
+        {% elif envio_whatsapp.dev_mode %}
+          ℹ️ Modo desarrollo: El QR se muestra en pantalla. 
+          {% if not movimiento.numero_telefono %}
+            No se proporcionó número de WhatsApp.
+          {% else %}
+            El número {{ movimiento.numero_telefono }} debe ser agregado en Meta for Developers.
+          {% endif %}
+        {% else %}
+          ⚠️ No se pudo enviar el QR por WhatsApp: {{ envio_whatsapp.message }}
+        {% endif %}
+      </span>
+    </div>
+    {% else %}
+    <div class="whatsapp-status whatsapp-dev">
+      <span class="whatsapp-icon">ℹ️</span>
+      <span>
+        No se proporcionó número de WhatsApp. El QR está disponible en esta pantalla.
+      </span>
+    </div>
+    {% endif %}
+
+    <div class="qr-container">
+      <h3 class="qr-titulo">📱 Tu Código QR de Entrada</h3>
+      <p class="qr-instruccion">
+        <strong>IMPORTANTE:</strong> Guarda este código QR. Deberás mostrarlo al personal de caja al momento de pagar tu estacionamiento.
+      </p>
+      <img src="data:image/png;base64,{{ qr_base64 }}" alt="QR Code" class="qr-image" id="qr-image">
+      
+      <div style="margin-top: 20px;">
+        <button onclick="descargarQR()" class="btn-primary btn-download">💾 Descargar QR</button>
+        <button onclick="imprimirQR()" class="btn-primary btn-print">🖨️ Imprimir</button>
+      </div>
+    </div>
+    <div style="background: #e3f2fd; padding: 20px; border-radius: 10px; margin: 20px 0;">
+        <h3 style="color: #1976D2; margin-bottom: 15px;">🔗 Enlace de Consulta</h3>
+        <p style="margin-bottom: 10px;">El usuario puede acceder a su ticket escaneando el QR o visitando:</p>
+        <div style="background: white; padding: 15px; border-radius: 8px; word-break: break-all; font-family: monospace; font-size: 14px;">
+            <a href="{{ url_ticket }}" target="_blank" style="color: #2196F3;">{{ url_ticket }}</a>
+        </div>
+        <p style="margin-top: 10px; color: #666; font-size: 14px;">
+            ℹ️ Este enlace se actualizará en tiempo real con el estado del vehículo
+        </p>
+    </div>
+
+    <div class="acciones-container">
+      <p style="color: #666; margin-bottom: 20px;">¿Qué deseas hacer ahora?</p>
+      <a href="{{ url_for('main.index') }}" class="btn-primary">🏠 Volver al Inicio</a>
+      <a href="{{ url_for('main.registro_placa') }}" class="btn-primary">➕ Registrar Otro Vehículo</a>
+    </div>
+  </div>
+
+  <script>
+    // Descargar QR
+    function descargarQR() {
+      const link = document.createElement('a');
+      link.href = document.getElementById('qr-image').src;
+      link.download = 'qr_entrada_{{ movimiento.placa }}_{{ movimiento.token[:8] }}.png';
+      link.click();
+    }
+
+    // Imprimir QR
+    function imprimirQR() {
+      window.print();
+    }
+
+    // Copiar token al portapapeles
+    function copiarToken() {
+      const token = '{{ movimiento.token }}';
+      navigator.clipboard.writeText(token).then(() => {
+        alert('Token copiado al portapapeles');
+      });
+    }
+  </script>
+</body>
+</html>

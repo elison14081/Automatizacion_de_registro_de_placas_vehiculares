@@ -1,0 +1,16 @@
+# Entornos virtuales
+sistema_parkeo/env/
+venv/
+.env/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Librerías de OpenCV/C++
+*.pyd
+*.dll
+
+# Datasets pesados (si tienes)
+*.csv
+*.ipynb_checkpoints/

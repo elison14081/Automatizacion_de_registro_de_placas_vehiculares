@@ -1,0 +1,8 @@
+Flask==2.3.2
+Flask-SQLAlchemy==3.0.3
+pymysql==1.0.3
+opencv-python-headless==4.7.0.72
+ultralytics==8.0.150
+easyocr==1.6.2
+qrcode[pil]==7.4.2
+requests==2.31.0

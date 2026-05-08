@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Error - Sistema de Parkeo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <style>
+    body {
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .error-container {
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 40px;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .error-icon {
+      font-size: 80px;
+      color: #f44336;
+      margin-bottom: 20px;
+    }
+    .error-title {
+      color: #f44336;
+      font-size: 28px;
+      margin-bottom: 20px;
+    }
+    .error-message {
+      color: #666;
+      font-size: 18px;
+      margin: 20px 0;
+      line-height: 1.6;
+    }
+    .info-box {
+      background: #fff3cd;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 25px 0;
+      border-left: 4px solid #ffc107;
+      text-align: left;
+    }
+    .info-box p {
+      margin: 10px 0;
+      color: #856404;
+    }
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+      padding: 15px 30px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      margin: 10px;
+      transition: all 0.3s;
+    }
+    .btn-primary:hover {
+      background: #45a049;
+      transform: translateY(-2px);
+    }
+    .btn-secondary {
+      background: #2196F3;
+    }
+    .btn-secondary:hover {
+      background: #0b7dda;
+    }
+  </style>
+</head>
+<body>
+  <div class="error-container">
+    <div class="error-icon">⚠️</div>
+    <h2 class="error-title">Error en el Registro</h2>
+    
+    <p class="error-message">{{ mensaje }}</p>
+    
+    {% if movimiento %}
+    <div class="info-box">
+      <p><strong>Información del vehículo ya registrado:</strong></p>
+      <p>📋 Placa: <strong>{{ movimiento.placa }}</strong></p>
+      <p>🕐 Hora de entrada: {{ movimiento.hora_entrada.strftime('%d/%m/%Y %H:%M:%S') }}</p>
+      <p>🎫 Token: <code style="background: #f8f9fa; padding: 5px; border-radius: 3px;">{{ movimiento.token }}</code></p>
+    </div>
+    {% endif %}
+
+    <div style="margin-top: 30px;">
+      <a href="{{ url_for('main.index') }}" class="btn-primary">🏠 Volver al Inicio</a>
+      <a href="{{ url_for('main.registro_placa') }}" class="btn-primary btn-secondary">🔄 Intentar de Nuevo</a>
+    </div>
+  </div>
+</body>
+</html>

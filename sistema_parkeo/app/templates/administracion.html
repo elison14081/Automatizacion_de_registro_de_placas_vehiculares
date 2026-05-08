@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Administración - Sistema de Parkeo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <style>
+    body {
+      background: #f5f5f5;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 20px auto;
+      padding: 20px;
+    }
+    .header {
+      background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 15px;
+      text-align: center;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .header h2 {
+      margin: 0;
+      font-size: 36px;
+    }
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 15px 30px;
+      border: none;
+      background: white;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+      transition: all 0.3s;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .tab-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    .tab-btn.active {
+      background: #9C27B0;
+      color: white;
+    }
+    .tab-content {
+      display: none;
+      background: white;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 25px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    .stat-card h3 {
+      margin: 0;
+      font-size: 18px;
+      opacity: 0.9;
+    }
+    .stat-card .value {
+      font-size: 42px;
+      font-weight: bold;
+      margin: 15px 0;
+    }
+    .stat-card.green {
+      background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    }
+    .stat-card.blue {
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+    }
+    .stat-card.orange {
+      background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+    }
+    .stat-card.purple {
+      background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table th {
+      background: #9C27B0;
+      color: white;
+      padding: 15px;
+      text-align: left;
+      font-weight: bold;
+    }
+    table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    table tr:hover {
+      background: #f5f5f5;
+    }
+    .badge {
+      display: inline-block;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    .badge-success {
+      background: #d4edda;
+      color: #155724;
+    }
+    .badge-warning {
+      background: #fff3cd;
+      color: #856404;
+    }
+    .badge-danger {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .form-group {
+      margin: 20px 0;
+    }
+    .form-group label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: #9C27B0;
+      outline: none;
+    }
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 5px;
+      transition: all 0.3s;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    .btn-primary {
+      background: #9C27B0;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #7B1FA2;
+    }
+    .btn-success {
+      background: #4CAF50;
+      color: white;
+    }
+    .btn-success:hover {
+      background: #45a049;
+    }
+    .btn-danger {
+      background: #f44336;
+      color: white;
+    }
+    .btn-danger:hover {
+      background: #da190b;
+    }
+    .btn-secondary {
+      background: #757575;
+      color: white;
+    }
+    .btn-secondary:hover {
+      background: #616161;
+    }
+    .btn-volver {
+      background: #2196F3;
+      color: white;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-volver:hover {
+      background: #0b7dda;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    .filtros {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    .filtros-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+    }
+    .alert {
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin: 15px 0;
+    }
+    .alert-success {
+      background: #d4edda;
+      color: #155724;
+      border: 2px solid #c3e6cb;
+    }
+    .alert-error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 2px solid #f5c6cb;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal.show {
+      display: flex;
+    }
+    .modal-content {
+      background: white;
+      padding: 30px;
+      border-radius: 15px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    .modal-close {
+      font-size: 28px;
+      cursor: pointer;
+      color: #999;
+    }
+    .modal-close:hover {
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>⚙️ Panel de Administración</h2>
+      <p>Gestión completa del sistema de parkeo</p>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 20px;">
+      <a href="{{ url_for('main.index') }}" class="btn btn-volver">← Volver al Inicio</a>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="dashboard">📊 Dashboard</button>
+      <button class="tab-btn" data-tab="vehiculos">🚗 Vehículos Activos</button>
+      <button class="tab-btn" data-tab="historial">📋 Historial</button>
+      <button class="tab-btn" data-tab="tarifas">💰 Tarifas</button>
+      <button class="tab-btn" data-tab="reportes">📈 Reportes</button>
+    </div>
+
+    <!-- Tab: Dashboard -->
+    <div class="tab-content active" id="tab-dashboard">
+      <h3 style="margin-bottom: 20px;">Resumen General</h3>
+      
+      <div class="stats-grid" id="stats-container">
+        <!-- Se carga dinámicamente -->
+      </div>
+
+      <h3 style="margin-top: 40px;">Vehículos Recientes</h3>
+      <table id="tabla-recientes">
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>Hora Entrada</th>
+            <th>Tiempo</th>
+            <th>Estado Pago</th>
+            <th>Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Se carga dinámicamente -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Tab: Vehículos Activos -->
+    <div class="tab-content" id="tab-vehiculos">
+      <h3>Vehículos en el Estacionamiento</h3>
+      
+      <table id="tabla-activos">
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>Token</th>
+            <th>Hora Entrada</th>
+            <th>Tiempo</th>
+            <th>Teléfono</th>
+            <th>Estado Pago</th>
+            <th>Monto</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Se carga dinámicamente -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Tab: Historial -->
+    <div class="tab-content" id="tab-historial">
+      <h3>Historial de Movimientos</h3>
+      
+      <div class="filtros">
+        <h4>Filtros</h4>
+        <div class="filtros-grid">
+          <div class="form-group">
+            <label>Fecha Desde</label>
+            <input type="date" id="filtro-fecha-desde">
+          </div>
+          <div class="form-group">
+            <label>Fecha Hasta</label>
+            <input type="date" id="filtro-fecha-hasta">
+          </div>
+          <div class="form-group">
+            <label>Placa</label>
+            <input type="text" id="filtro-placa" placeholder="Buscar placa">
+          </div>
+          <div class="form-group">
+            <label>Estado</label>
+            <select id="filtro-estado">
+              <option value="">Todos</option>
+              <option value="pagado">Pagados</option>
+              <option value="pendiente">Pendientes</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="aplicarFiltros()">Aplicar Filtros</button>
+        <button class="btn btn-secondary" onclick="limpiarFiltros()">Limpiar</button>
+      </div>
+
+      <table id="tabla-historial">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Placa</th>
+            <th>Entrada</th>
+            <th>Salida</th>
+            <th>Duración</th>
+            <th>Estado</th>
+            <th>Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Se carga dinámicamente -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Tab: Tarifas -->
+    <div class="tab-content" id="tab-tarifas">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3>Gestión de Tarifas</h3>
+        <button class="btn btn-success" onclick="abrirModalTarifa()">+ Nueva Tarifa</button>
+      </div>
+
+      <table id="tabla-tarifas">
+        <thead>
+          <tr>
+            <th>Descripción</th>
+            <th>Desde (min)</th>
+            <th>Hasta (min)</th>
+            <th>Precio</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Se carga dinámicamente -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Tab: Reportes -->
+    <div class="tab-content" id="tab-reportes">
+      <h3>Reportes y Estadísticas</h3>
+      
+      <div class="stats-grid">
+        <div class="stat-card green">
+          <h3>Ingresos Hoy</h3>
+          <div class="value" id="ingresos-hoy">S/ 0.00</div>
+        </div>
+        <div class="stat-card blue">
+          <h3>Ingresos Esta Semana</h3>
+          <div class="value" id="ingresos-semana">S/ 0.00</div>
+        </div>
+        <div class="stat-card orange">
+          <h3>Ingresos Este Mes</h3>
+          <div class="value" id="ingresos-mes">S/ 0.00</div>
+        </div>
+        <div class="stat-card purple">
+          <h3>Total Vehículos Atendidos</h3>
+          <div class="value" id="total-vehiculos">0</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 30px;">
+        <button class="btn btn-primary" onclick="exportarReporte()">📥 Exportar Reporte Excel</button>
+        <button class="btn btn-success" onclick="imprimirReporte()">🖨️ Imprimir Reporte</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Nueva/Editar Tarifa -->
+  <div class="modal" id="modal-tarifa">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-tarifa-titulo">Nueva Tarifa</h3>
+        <span class="modal-close" onclick="cerrarModalTarifa()">×</span>
+      </div>
+      
+      <form id="form-tarifa">
+        <input type="hidden" id="tarifa-id">
+        
+        <div class="form-group">
+          <label>Descripción</label>
+          <input type="text" id="tarifa-descripcion" placeholder="Ej: Primera hora" required>
+        </div>
+        
+        <div class="form-group">
+          <label>Minutos Desde</label>
+          <input type="number" id="tarifa-desde" min="0" placeholder="0" required>
+        </div>
+        
+        <div class="form-group">
+          <label>Minutos Hasta (vacío = sin límite)</label>
+          <input type="number" id="tarifa-hasta" min="0" placeholder="Dejar vacío para ilimitado">
+        </div>
+        
+        <div class="form-group">
+          <label>Precio (S/)</label>
+          <input type="number" id="tarifa-precio" step="0.01" min="0" placeholder="5.00" required>
+        </div>
+        
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="tarifa-activo" checked>
+            Tarifa Activa
+          </label>
+        </div>
+        
+        <div style="text-align: right; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary" onclick="cerrarModalTarifa()">Cancelar</button>
+          <button type="submit" class="btn btn-success">Guardar Tarifa</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Cambio de tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.onclick = () => {
+        const tab = btn.dataset.tab;
+        
+        // Actualizar botones
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // Actualizar contenido
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        
+        // Cargar datos según tab
+        cargarDatosTab(tab);
+      };
+    });
+
+    // Cargar datos al inicio
+    document.addEventListener('DOMContentLoaded', () => {
+      cargarDatosTab('dashboard');
+    });
+
+    function cargarDatosTab(tab) {
+      switch(tab) {
+        case 'dashboard':
+          cargarDashboard();
+          break;
+        case 'vehiculos':
+          cargarVehiculosActivos();
+          break;
+        case 'historial':
+          cargarHistorial();
+          break;
+        case 'tarifas':
+          cargarTarifas();
+          break;
+        case 'reportes':
+          cargarReportes();
+          break;
+      }
+    }
+
+    function cargarDashboard() {
+      fetch('/admin/dashboard')
+        .then(r => r.json())
+        .then(data => {
+          // Estadísticas
+          document.getElementById('stats-container').innerHTML = `
+            <div class="stat-card green">
+              <h3>Vehículos Activos</h3>
+              <div class="value">${data.vehiculos_activos}</div>
+            </div>
+            <div class="stat-card blue">
+              <h3>Pagados Hoy</h3>
+              <div class="value">${data.pagados_hoy}</div>
+            </div>
+            <div class="stat-card orange">
+              <h3>Pendientes de Pago</h3>
+              <div class="value">${data.pendientes_pago}</div>
+            </div>
+            <div class="stat-card purple">
+              <h3>Ingresos Hoy</h3>
+              <div class="value">S/ ${data.ingresos_hoy.toFixed(2)}</div>
+            </div>
+          `;
+          
+          // Tabla recientes
+          const tbody = document.querySelector('#tabla-recientes tbody');
+          tbody.innerHTML = data.recientes.map(v => `
+            <tr>
+              <td><strong>${v.placa}</strong></td>
+              <td>${v.hora_entrada}</td>
+              <td>${v.tiempo_transcurrido}</td>
+              <td>
+                <span class="badge ${v.pagado ? 'badge-success' : 'badge-warning'}">
+                  ${v.pagado ? 'PAGADO' : 'PENDIENTE'}
+                </span>
+              </td>
+              <td><strong>S/ ${v.monto.toFixed(2)}</strong></td>
+            </tr>
+          `).join('');
+        });
+    }
+
+    function cargarVehiculosActivos() {
+      fetch('/admin/vehiculos-activos')
+        .then(r => r.json())
+        .then(data => {
+          const tbody = document.querySelector('#tabla-activos tbody');
+          tbody.innerHTML = data.map(v => `
+            <tr>
+              <td><strong>${v.placa}</strong></td>
+              <td><small>${v.token.substring(0, 16)}...</small></td>
+              <td>${v.hora_entrada}</td>
+              <td>${v.tiempo_transcurrido}</td>
+              <td>${v.telefono || '-'}</td>
+              <td>
+                <span class="badge ${v.pagado ? 'badge-success' : 'badge-warning'}">
+                  ${v.pagado ? 'PAGADO' : 'PENDIENTE'}
+                </span>
+              </td>
+              <td><strong>S/ ${v.monto.toFixed(2)}</strong></td>
+              <td>
+                <div class="action-buttons">
+                  ${!v.pagado ? `<button class="btn btn-success btn-sm" onclick="marcarPagado(${v.id})">Pagar</button>` : ''}
+                  ${v.pagado ? `<button class="btn btn-primary btn-sm" onclick="autorizarSalida(${v.id})">Salida</button>` : ''}
+                </div>
+              </td>
+            </tr>
+          `).join('');
+        });
+    }
+
+    function cargarHistorial() {
+      // Implementar con filtros
+      fetch('/admin/historial')
+        .then(r => r.json())
+        .then(data => {
+          const tbody = document.querySelector('#tabla-historial tbody');
+          tbody.innerHTML = data.map(v => `
+            <tr>
+              <td>${v.id}</td>
+              <td><strong>${v.placa}</strong></td>
+              <td>${v.hora_entrada}</td>
+              <td>${v.hora_salida || '-'}</td>
+              <td>${v.duracion || '-'}</td>
+              <td>
+                <span class="badge ${v.pagado ? 'badge-success' : 'badge-warning'}">
+                  ${v.pagado ? 'PAGADO' : 'PENDIENTE'}
+                </span>
+              </td>
+              <td><strong>S/ ${v.monto.toFixed(2)}</strong></td>
+            </tr>
+          `).join('');
+        });
+    }
+
+    function cargarTarifas() {
+      fetch('/admin/tarifas')
+        .then(r => r.json())
+        .then(data => {
+          const tbody = document.querySelector('#tabla-tarifas tbody');
+          tbody.innerHTML = data.map(t => `
+            <tr>
+              <td>${t.descripcion}</td>
+              <td>${t.minutos_desde}</td>
+              <td>${t.minutos_hasta || '∞'}</td>
+              <td><strong>S/ ${t.precio.toFixed(2)}</strong></td>
+              <td>
+                <span class="badge ${t.activo ? 'badge-success' : 'badge-danger'}">
+                  ${t.activo ? 'ACTIVA' : 'INACTIVA'}
+                </span>
+              </td>
+              <td>
+                <button class="btn btn-primary btn-sm" onclick="editarTarifa(${t.id})">Editar</button>
+                <button class="btn btn-danger btn-sm" onclick="eliminarTarifa(${t.id})">Eliminar</button>
+              </td>
+            </tr>
+          `).join('');
+        });
+    }
+
+    function cargarReportes() {
+      fetch('/admin/reportes')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('ingresos-hoy').textContent = `S/ ${data.ingresos_hoy.toFixed(2)}`;
+          document.getElementById('ingresos-semana').textContent = `S/ ${data.ingresos_semana.toFixed(2)}`;
+          document.getElementById('ingresos-mes').textContent = `S/ ${data.ingresos_mes.toFixed(2)}`;
+          document.getElementById('total-vehiculos').textContent = data.total_vehiculos;
+        });
+    }
+
+    // Modal Tarifa
+    function abrirModalTarifa(id = null) {
+      document.getElementById('modal-tarifa').classList.add('show');
+      if (id) {
+        // Cargar datos de tarifa existente
+        fetch(`/admin/tarifa/${id}`)
+          .then(r => r.json())
+          .then(data => {
+            document.getElementById('tarifa-id').value = data.id;
+            document.getElementById('tarifa-descripcion').value = data.descripcion;
+            document.getElementById('tarifa-desde').value = data.minutos_desde;
+            document.getElementById('tarifa-hasta').value = data.minutos_hasta || '';
+            document.getElementById('tarifa-precio').value = data.precio;
+            document.getElementById('tarifa-activo').checked = data.activo;
+            document.getElementById('modal-tarifa-titulo').textContent = 'Editar Tarifa';
+          });
+      } else {
+        document.getElementById('form-tarifa').reset();
+        document.getElementById('tarifa-id').value = '';
+        document.getElementById('modal-tarifa-titulo').textContent = 'Nueva Tarifa';
+      }
+    }
+
+    function cerrarModalTarifa() {
+      document.getElementById('modal-tarifa').classList.remove('show');
+    }
+
+    // Guardar tarifa
+    document.getElementById('form-tarifa').onsubmit = (e) => {
+      e.preventDefault();
+      
+      const id = document.getElementById('tarifa-id').value;
+      const data = {
+        descripcion: document.getElementById('tarifa-descripcion').value,
+        minutos_desde: parseInt(document.getElementById('tarifa-desde').value),
+        minutos_hasta: document.getElementById('tarifa-hasta').value ? parseInt(document.getElementById('tarifa-hasta').value) : null,
+        precio: parseFloat(document.getElementById('tarifa-precio').value),
+        activo: document.getElementById('tarifa-activo').checked
+      };
+      
+      const url = id ? `/admin/tarifa/${id}` : '/admin/tarifa';
+      const method = id ? 'PUT' : 'POST';
+      
+      fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      })
+      .then(r => r.json())
+      .then(result => {
+        if (result.success) {
+          alert('Tarifa guardada correctamente');
+          cerrarModalTarifa();
+          cargarTarifas();
+        } else {
+          alert('Error: ' + result.error);
+        }
+      });
+    };
+
+    function editarTarifa(id) {
+      abrirModalTarifa(id);
+    }
+
+    function eliminarTarifa(id) {
+      if (confirm('¿Eliminar esta tarifa?')) {
+        fetch(`/admin/tarifa/${id}`, {method: 'DELETE'})
+          .then(r => r.json())
+          .then(result => {
+            if (result.success) {
+              alert('Tarifa eliminada');
+              cargarTarifas();
+            }
+          });
+      }
+    }
+
+    function marcarPagado(id) {
+      fetch('/confirmar-pago', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({movimiento_id: id})
+      })
+      .then(r => r.json())
+      .then(result => {
+        if (result.success) {
+          alert('Pago confirmado');
+          cargarVehiculosActivos();
+        }
+      });
+    }
+
+    function autorizarSalida(id) {
+      fetch(`/autorizar-salida/${id}`, {method: 'POST'})
+        .then(r => r.json())
+        .then(result => {
+          if (result.success) {
+            alert('Salida autorizada');
+            cargarVehiculosActivos();
+          }
+        });
+    }
+  </script>
+</body>
+</html>

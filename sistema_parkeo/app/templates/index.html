@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Parkeo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .main-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 50px;
+    }
+    .header h1 {
+      font-size: 48px;
+      margin: 0;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    .header p {
+      font-size: 20px;
+      margin-top: 10px;
+    }
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 30px;
+      margin-top: 40px;
+    }
+    .menu-card {
+      background: white;
+      border-radius: 15px;
+      padding: 40px;
+      text-align: center;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      transition: transform 0.3s, box-shadow 0.3s;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    .menu-card:hover {
+      transform: translateY(-10px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.3);
+    }
+    .menu-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+    .menu-card h3 {
+      font-size: 24px;
+      margin: 15px 0;
+      color: #333;
+    }
+    .menu-card p {
+      color: #666;
+      font-size: 16px;
+    }
+    .card-entrada {
+      border-top: 5px solid #4CAF50;
+    }
+    .card-cobro {
+      border-top: 5px solid #2196F3;
+    }
+    .card-salida {
+      border-top: 5px solid #FF9800;
+    }
+    .card-admin {
+      border-top: 5px solid #9C27B0;
+    }
+  </style>
+</head>
+<body>
+  <div class="main-container">
+    <div class="header">
+      <h1>🚗 Sistema de Parkeo</h1>
+      <p>Gestión inteligente de estacionamiento</p>
+    </div>
+
+    <div class="menu-grid">
+      <a href="{{ url_for('main.registro_placa') }}" class="menu-card card-entrada">
+        <div class="menu-icon">🚘</div>
+        <h3>Registrar Entrada</h3>
+        <p>Escanea la placa del vehículo que ingresa al estacionamiento</p>
+      </a>
+
+      <a href="{{ url_for('main.cobro_pago') }}" class="menu-card card-cobro">
+        <div class="menu-icon">💳</div>
+        <h3>Cobrar / Pagar</h3>
+        <p>Procesa el pago de vehículos estacionados</p>
+      </a>
+
+      <a href="{{ url_for('main.control_salida') }}" class="menu-card card-salida">
+        <div class="menu-icon">🚦</div>
+        <h3>Control de Salida</h3>
+        <p>Verifica y autoriza la salida de vehículos</p>
+      </a>
+
+      <a href="{{ url_for('main.administracion') }}" class="menu-card card-admin">
+        <div class="menu-icon">⚙️</div>
+        <h3>Administración</h3>
+        <p>Configuración, tarifas y reportes del sistema</p>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

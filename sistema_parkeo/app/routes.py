@@ -1,0 +1,730 @@
+from flask import Blueprint, render_template, request, jsonify, Response, current_app, flash, redirect, url_for
+from werkzeug.utils import secure_filename
+import os
+import cv2
+from datetime import datetime
+from app import db
+from app.models import Movimiento, Tarifa
+from app.ocr_service import OCRService
+from app.qr_service import QRService
+from app.whatsapp_service import WhatsAppService
+from sqlalchemy import func
+from datetime import timedelta
+
+bp = Blueprint('main', __name__)
+
+# Instancia global del servicio OCR
+ocr_service = None
+
+def get_ocr_service():
+    global ocr_service
+    if ocr_service is None:
+        ocr_service = OCRService()
+    return ocr_service
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
+
+@bp.route('/')
+def index():
+    """Página principal del sistema"""
+    return render_template('index.html')
+
+# ELIMINAR ESTA FUNCIÓN (líneas 26-28 aproximadamente)
+# @bp.route('/registro-placa')
+# def registro_placa():
+#     """Vista para registrar entrada de vehículos"""
+#     return render_template('registro_placa.html')
+
+@bp.route('/procesar-imagen-placa', methods=['POST'])
+def procesar_imagen_placa():
+    """Procesa imagen subida y detecta placa con OCR"""
+    
+    if 'imagen' not in request.files:
+        return jsonify({'error': 'No se envió ninguna imagen'}), 400
+    
+    file = request.files['imagen']
+    
+    if file.filename == '':
+        return jsonify({'error': 'Nombre de archivo vacío'}), 400
+    
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{filename}"
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        # Detectar placa con OCR
+        ocr = get_ocr_service()
+        placa = ocr.detectar_placa_desde_imagen(filepath)
+        
+        # Limpiar archivo temporal
+        try:
+            os.remove(filepath)
+        except:
+            pass
+        
+        if placa:
+            return jsonify({'placa': placa, 'success': True})
+        else:
+            return jsonify({'error': 'No se detectó ninguna placa', 'success': False}), 404
+    
+    return jsonify({'error': 'Tipo de archivo no permitido'}), 400
+
+@bp.route('/video_feed')
+def video_feed():
+    """Stream de video con detección de placas en tiempo real"""
+    
+    def generate():
+        ocr = get_ocr_service()
+        ocr.iniciar_camara()
+        
+        while True:
+            frame, placa = ocr.obtener_frame_con_deteccion()
+            
+            if frame is None:
+                break
+            
+            # Codificar frame a JPEG
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame_bytes = buffer.tobytes()
+            
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+    
+    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@bp.route('/capturar-placa', methods=['POST'])
+def capturar_placa():
+    """Captura y detecta placa desde la cámara en tiempo real"""
+    
+    ocr = get_ocr_service()
+    placa = ocr.capturar_placa()
+    
+    if placa:
+        return jsonify({'placa': placa, 'success': True})
+    else:
+        return jsonify({'error': 'No se detectó placa', 'success': False}), 404
+
+@bp.route('/registro-placa', methods=['GET', 'POST'])
+def registro_placa():
+    if request.method == 'POST':
+        placa = request.form.get('placa', '').strip().upper()
+        numero_telefono = request.form.get('numero_telefono', '').strip()
+        
+        if not placa:
+            flash('Debe proporcionar una placa', 'error')
+            return redirect(url_for('main.registro_placa'))
+        
+        # Verificar si ya existe un movimiento activo
+        movimiento_activo = Movimiento.query.filter_by(
+            placa=placa,
+            hora_salida=None
+        ).first()
+        
+        if movimiento_activo:
+            return render_template('error.html',
+                mensaje='Esta placa ya tiene un registro de entrada activo',
+                movimiento=movimiento_activo)
+        
+        # Generar token y QR
+        qr_service = QRService()
+        token = qr_service.generar_token()
+        hora_entrada = datetime.utcnow()
+        
+        # Generar QR con URL de consulta
+        qr_base64 = qr_service.generar_qr_movimiento(
+            placa=placa,
+            token=token,
+            hora_entrada=hora_entrada,
+            numero_telefono=numero_telefono if numero_telefono else None
+        )
+        
+        # Crear movimiento
+        movimiento = Movimiento(
+            placa=placa,
+            token=token,
+            hora_entrada=hora_entrada,
+            qr_imagen=qr_base64,
+            numero_telefono=numero_telefono if numero_telefono else None
+        )
+        
+        db.session.add(movimiento)
+        db.session.commit()
+        
+        current_app.logger.info(f'Entrada registrada: Placa {placa}, Token {token}')
+        
+        # URL pública del ticket
+        url_ticket = url_for('main.ver_ticket', token=token, _external=True)
+        
+        # Intentar enviar por WhatsApp solo si hay número
+        envio_whatsapp = {'success': False, 'dev_mode': True}
+        
+        if numero_telefono:
+            whatsapp_service = WhatsAppService()
+            envio_whatsapp = whatsapp_service.enviar_qr_entrada(
+                numero=numero_telefono,
+                placa=placa,
+                qr_base64=qr_base64,
+                token=token
+            )
+            
+            if not envio_whatsapp.get('success'):
+                current_app.logger.warning(f"No se pudo enviar QR a {numero_telefono}: {envio_whatsapp.get('message')}")
+        else:
+            current_app.logger.info(f"Registro sin teléfono - QR solo en pantalla")
+        
+        return render_template('confirmacion_entrada.html',
+                             movimiento=movimiento,
+                             qr_base64=qr_base64,
+                             url_ticket=url_ticket,
+                             envio_whatsapp=envio_whatsapp)
+    
+    return render_template('registro_placa.html')
+
+@bp.route('/detener-camara', methods=['POST'])
+def detener_camara():
+    """Detiene el stream de la cámara"""
+    ocr = get_ocr_service()
+    ocr.detener_camara()
+    return jsonify({'success': True, 'message': 'Cámara detenida'})
+
+
+@bp.route('/control-salida')
+def control_salida():
+    """Vista para control de salida de vehículos"""
+    return render_template('control_salida.html')
+
+@bp.route('/verificar-salida-imagen', methods=['POST'])
+def verificar_salida_imagen():
+    """Verifica si un vehículo puede salir mediante imagen de placa"""
+    
+    if 'imagen' not in request.files:
+        return jsonify({'error': 'No se envió ninguna imagen'}), 400
+    
+    file = request.files['imagen']
+    
+    if file.filename == '':
+        return jsonify({'error': 'Nombre de archivo vacío'}), 400
+    
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"salida_{timestamp}_{filename}"
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        # Detectar placa con OCR
+        ocr = get_ocr_service()
+        placa = ocr.detectar_placa_desde_imagen(filepath)
+        
+        # Limpiar archivo temporal
+        try:
+            os.remove(filepath)
+        except:
+            pass
+        
+        if not placa:
+            return jsonify({'error': 'No se detectó ninguna placa', 'success': False}), 404
+        
+        # Buscar movimiento activo de este vehículo
+        movimiento = Movimiento.query.filter_by(
+            placa=placa,
+            hora_salida=None
+        ).order_by(Movimiento.hora_entrada.desc()).first()
+        
+        if not movimiento:
+            return jsonify({
+                'error': 'No hay registro de entrada para esta placa',
+                'placa': placa,
+                'puede_salir': False,
+                'motivo': 'sin_registro'
+            }), 404
+        
+        # Verificar si ya pagó
+        resultado = {
+            'placa': placa,
+            'puede_salir': movimiento.pagado,
+            'motivo': 'pago_ok' if movimiento.pagado else 'falta_pago',
+            'movimiento': {
+                'id': movimiento.id,
+                'token': movimiento.token,
+                'hora_entrada': movimiento.hora_entrada.strftime('%d/%m/%Y %H:%M:%S'),
+                'pagado': movimiento.pagado,
+                'monto': float(movimiento.monto) if movimiento.monto else 0
+            }
+        }
+        
+        return jsonify(resultado)
+    
+    return jsonify({'error': 'Tipo de archivo no permitido'}), 400
+
+@bp.route('/capturar-salida', methods=['POST'])
+def capturar_salida():
+    """Captura placa desde cámara para verificar salida"""
+    
+    ocr = get_ocr_service()
+    placa = ocr.capturar_placa()
+    
+    if not placa:
+        return jsonify({'error': 'No se detectó placa', 'success': False}), 404
+    
+    # Buscar movimiento activo
+    movimiento = Movimiento.query.filter_by(
+        placa=placa,
+        hora_salida=None
+    ).order_by(Movimiento.hora_entrada.desc()).first()
+    
+    if not movimiento:
+        return jsonify({
+            'error': 'No hay registro de entrada para esta placa',
+            'placa': placa,
+            'puede_salir': False,
+            'motivo': 'sin_registro'
+        }), 404
+    
+    resultado = {
+        'placa': placa,
+        'puede_salir': movimiento.pagado,
+        'motivo': 'pago_ok' if movimiento.pagado else 'falta_pago',
+        'movimiento': {
+            'id': movimiento.id,
+            'token': movimiento.token,
+            'hora_entrada': movimiento.hora_entrada.strftime('%d/%m/%Y %H:%M:%S'),
+            'pagado': movimiento.pagado,
+            'monto': float(movimiento.monto) if movimiento.monto else 0
+        }
+    }
+    
+    return jsonify(resultado)
+
+@bp.route('/autorizar-salida/<int:movimiento_id>', methods=['POST'])
+def autorizar_salida(movimiento_id):
+    """Autoriza la salida de un vehículo y registra hora de salida"""
+    
+    movimiento = Movimiento.query.get_or_404(movimiento_id)
+    
+    if not movimiento.pagado:
+        return jsonify({'error': 'El vehículo no ha pagado'}), 400
+    
+    if movimiento.hora_salida:
+        return jsonify({'error': 'Ya se registró la salida de este vehículo'}), 400
+    
+    movimiento.hora_salida = datetime.utcnow()
+    
+    try:
+        db.session.commit()
+        current_app.logger.info(f'Salida autorizada: Placa {movimiento.placa}, Token {movimiento.token}')
+        
+        return jsonify({
+            'success': True,
+            'message': 'Salida autorizada correctamente',
+            'placa': movimiento.placa,
+            'hora_salida': movimiento.hora_salida.strftime('%d/%m/%Y %H:%M:%S')
+        })
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error al autorizar salida: {str(e)}')
+        return jsonify({'error': 'Error al registrar salida'}), 500
+
+@bp.route('/cobro-pago')
+def cobro_pago():
+    """Vista para cobro y pago de estacionamiento"""
+    return render_template('cobro_pago.html')
+
+@bp.route('/buscar-movimiento-token', methods=['POST'])
+def buscar_movimiento_token():
+    """Busca un movimiento por token"""
+    data = request.get_json()
+    token = data.get('token', '').strip()
+    
+    if not token:
+        return jsonify({'error': 'Token no proporcionado'}), 400
+    
+    movimiento = Movimiento.query.filter_by(
+        token=token,
+        hora_salida=None
+    ).first()
+    
+    if not movimiento:
+        return jsonify({'error': 'No se encontró ningún vehículo con ese token o ya ha salido'}), 404
+    
+    # Calcular tiempo y costo
+    tiempo_transcurrido = datetime.utcnow() - movimiento.hora_entrada
+    minutos = int(tiempo_transcurrido.total_seconds() / 60)
+    
+    # Calcular costo según tarifas
+    monto = calcular_tarifa(minutos)
+    
+    # Actualizar monto si no está pagado
+    if not movimiento.pagado:
+        movimiento.monto = monto
+        db.session.commit()
+    
+    return jsonify({
+        'id': movimiento.id,
+        'placa': movimiento.placa,
+        'token': movimiento.token,
+        'hora_entrada': movimiento.hora_entrada.strftime('%d/%m/%Y %H:%M:%S'),
+        'tiempo_transcurrido': f'{minutos // 60}h {minutos % 60}min',
+        'minutos': minutos,
+        'monto': float(movimiento.monto) if movimiento.monto else float(monto),
+        'pagado': movimiento.pagado,
+        'telefono': movimiento.numero_telefono
+    })
+
+@bp.route('/buscar-movimiento-placa', methods=['POST'])
+def buscar_movimiento_placa():
+    """Busca un movimiento por placa"""
+    data = request.get_json()
+    placa = data.get('placa', '').strip().upper()
+    
+    if not placa:
+        return jsonify({'error': 'Placa no proporcionada'}), 400
+    
+    movimiento = Movimiento.query.filter_by(
+        placa=placa,
+        hora_salida=None
+    ).order_by(Movimiento.hora_entrada.desc()).first()
+    
+    if not movimiento:
+        return jsonify({'error': 'No se encontró ningún vehículo con esa placa o ya ha salido'}), 404
+    
+    # Calcular tiempo y costo
+    tiempo_transcurrido = datetime.utcnow() - movimiento.hora_entrada
+    minutos = int(tiempo_transcurrido.total_seconds() / 60)
+    
+    # Calcular costo según tarifas
+    monto = calcular_tarifa(minutos)
+    
+    # Actualizar monto si no está pagado
+    if not movimiento.pagado:
+        movimiento.monto = monto
+        db.session.commit()
+    
+    return jsonify({
+        'id': movimiento.id,
+        'placa': movimiento.placa,
+        'token': movimiento.token,
+        'hora_entrada': movimiento.hora_entrada.strftime('%d/%m/%Y %H:%M:%S'),
+        'tiempo_transcurrido': f'{minutos // 60}h {minutos % 60}min',
+        'minutos': minutos,
+        'monto': float(movimiento.monto) if movimiento.monto else float(monto),
+        'pagado': movimiento.pagado,
+        'telefono': movimiento.numero_telefono
+    })
+
+@bp.route('/confirmar-pago', methods=['POST'])
+def confirmar_pago():
+    """Confirma el pago de un movimiento"""
+    data = request.get_json()
+    movimiento_id = data.get('movimiento_id')
+    
+    if not movimiento_id:
+        return jsonify({'error': 'ID de movimiento no proporcionado'}), 400
+    
+    movimiento = Movimiento.query.get_or_404(movimiento_id)
+    
+    if movimiento.pagado:
+        return jsonify({'error': 'Este vehículo ya ha pagado'}), 400
+    
+    if movimiento.hora_salida:
+        return jsonify({'error': 'Este vehículo ya ha salido'}), 400
+    
+    # Calcular monto final
+    tiempo_transcurrido = datetime.utcnow() - movimiento.hora_entrada
+    minutos = int(tiempo_transcurrido.total_seconds() / 60)
+    monto = calcular_tarifa(minutos)
+    
+    # Marcar como pagado
+    movimiento.pagado = True
+    movimiento.monto = monto
+    
+    try:
+        db.session.commit()
+        current_app.logger.info(f'Pago confirmado: Placa {movimiento.placa}, Monto S/ {monto}')
+        
+        return jsonify({
+            'success': True,
+            'message': 'Pago confirmado exitosamente',
+            'placa': movimiento.placa,
+            'monto': float(monto)
+        })
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error al confirmar pago: {str(e)}')
+        return jsonify({'error': 'Error al procesar el pago'}), 500
+
+def calcular_tarifa(minutos):
+    """Calcula la tarifa según los minutos transcurridos"""
+    
+    # Buscar la tarifa aplicable
+    tarifa = Tarifa.query.filter(
+        Tarifa.activo == True,
+        Tarifa.minutos_desde <= minutos
+    ).filter(
+        (Tarifa.minutos_hasta >= minutos) | (Tarifa.minutos_hasta == None)
+    ).order_by(Tarifa.minutos_desde.desc()).first()
+    
+    if tarifa:
+        return tarifa.precio
+    
+    # Tarifa por defecto si no se encuentra ninguna
+    return 5.00
+
+# ========== RUTAS DE ADMINISTRACIÓN ==========
+
+@bp.route('/administracion')
+def administracion():
+    """Vista principal de administración"""
+    return render_template('administracion.html')
+
+@bp.route('/admin/dashboard')
+def admin_dashboard():
+    """Datos del dashboard"""
+    hoy = datetime.utcnow().date()
+    
+    # Estadísticas
+    vehiculos_activos = Movimiento.query.filter_by(hora_salida=None).count()
+    pagados_hoy = Movimiento.query.filter(
+        func.date(Movimiento.hora_entrada) == hoy,
+        Movimiento.pagado == True
+    ).count()
+    pendientes_pago = Movimiento.query.filter_by(
+        hora_salida=None,
+        pagado=False
+    ).count()
+    
+    ingresos_hoy = db.session.query(func.sum(Movimiento.monto)).filter(
+        func.date(Movimiento.hora_entrada) == hoy,
+        Movimiento.pagado == True
+    ).scalar() or 0
+    
+    # Vehículos recientes
+    recientes = Movimiento.query.filter_by(hora_salida=None).order_by(
+        Movimiento.hora_entrada.desc()
+    ).limit(10).all()
+    
+    recientes_data = []
+    for m in recientes:
+        tiempo = datetime.utcnow() - m.hora_entrada
+        minutos = int(tiempo.total_seconds() / 60)
+        recientes_data.append({
+            'placa': m.placa,
+            'hora_entrada': m.hora_entrada.strftime('%d/%m/%Y %H:%M'),
+            'tiempo_transcurrido': f'{minutos // 60}h {minutos % 60}min',
+            'pagado': m.pagado,
+            'monto': float(m.monto) if m.monto else 0
+        })
+    
+    return jsonify({
+        'vehiculos_activos': vehiculos_activos,
+        'pagados_hoy': pagados_hoy,
+        'pendientes_pago': pendientes_pago,
+        'ingresos_hoy': float(ingresos_hoy),
+        'recientes': recientes_data
+    })
+
+@bp.route('/admin/vehiculos-activos')
+def admin_vehiculos_activos():
+    """Lista de vehículos actualmente en el estacionamiento"""
+    vehiculos = Movimiento.query.filter_by(hora_salida=None).order_by(
+        Movimiento.hora_entrada.desc()
+    ).all()
+    
+    data = []
+    for v in vehiculos:
+        tiempo = datetime.utcnow() - v.hora_entrada
+        minutos = int(tiempo.total_seconds() / 60)
+        monto = calcular_tarifa(minutos) if not v.pagado else v.monto
+        
+        data.append({
+            'id': v.id,
+            'placa': v.placa,
+            'token': v.token,
+            'hora_entrada': v.hora_entrada.strftime('%d/%m/%Y %H:%M:%S'),
+            'tiempo_transcurrido': f'{minutos // 60}h {minutos % 60}min',
+            'telefono': v.numero_telefono,
+            'pagado': v.pagado,
+            'monto': float(monto)
+        })
+    
+    return jsonify(data)
+
+@bp.route('/admin/historial')
+def admin_historial():
+    """Historial completo de movimientos"""
+    movimientos = Movimiento.query.order_by(Movimiento.hora_entrada.desc()).limit(100).all()
+    
+    data = []
+    for m in movimientos:
+        duracion = None
+        if m.hora_salida:
+            tiempo = m.hora_salida - m.hora_entrada
+            minutos = int(tiempo.total_seconds() / 60)
+            duracion = f'{minutos // 60}h {minutos % 60}min'
+        
+        data.append({
+            'id': m.id,
+            'placa': m.placa,
+            'hora_entrada': m.hora_entrada.strftime('%d/%m/%Y %H:%M'),
+            'hora_salida': m.hora_salida.strftime('%d/%m/%Y %H:%M') if m.hora_salida else None,
+            'duracion': duracion,
+            'pagado': m.pagado,
+            'monto': float(m.monto) if m.monto else 0
+        })
+    
+    return jsonify(data)
+
+@bp.route('/admin/tarifas')
+def admin_tarifas():
+    """Lista de tarifas"""
+    tarifas = Tarifa.query.order_by(Tarifa.minutos_desde).all()
+    
+    data = []
+    for t in tarifas:
+        data.append({
+            'id': t.id,
+            'descripcion': t.descripcion,
+            'minutos_desde': t.minutos_desde,
+            'minutos_hasta': t.minutos_hasta,
+            'precio': float(t.precio),
+            'activo': t.activo
+        })
+    
+    return jsonify(data)
+
+@bp.route('/admin/tarifa', methods=['POST'])
+def admin_crear_tarifa():
+    """Crear nueva tarifa"""
+    data = request.get_json()
+    
+    tarifa = Tarifa(
+        descripcion=data.get('descripcion'),
+        minutos_desde=data.get('minutos_desde'),
+        minutos_hasta=data.get('minutos_hasta'),
+        precio=data.get('precio'),
+        activo=data.get('activo', True)
+    )
+    
+    db.session.add(tarifa)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'id': tarifa.id})
+
+@bp.route('/admin/tarifa/<int:id>', methods=['GET'])
+def admin_obtener_tarifa(id):
+    """Obtener una tarifa específica"""
+    tarifa = Tarifa.query.get_or_404(id)
+    
+    return jsonify({
+        'id': tarifa.id,
+        'descripcion': tarifa.descripcion,
+        'minutos_desde': tarifa.minutos_desde,
+        'minutos_hasta': tarifa.minutos_hasta,
+        'precio': float(tarifa.precio),
+        'activo': tarifa.activo
+    })
+
+@bp.route('/admin/tarifa/<int:id>', methods=['PUT'])
+def admin_actualizar_tarifa(id):
+    """Actualizar tarifa"""
+    tarifa = Tarifa.query.get_or_404(id)
+    data = request.get_json()
+    
+    tarifa.descripcion = data.get('descripcion')
+    tarifa.minutos_desde = data.get('minutos_desde')
+    tarifa.minutos_hasta = data.get('minutos_hasta')
+    tarifa.precio = data.get('precio')
+    tarifa.activo = data.get('activo')
+    
+    db.session.commit()
+    
+    return jsonify({'success': True})
+
+@bp.route('/admin/tarifa/<int:id>', methods=['DELETE'])
+def admin_eliminar_tarifa(id):
+    """Eliminar tarifa"""
+    tarifa = Tarifa.query.get_or_404(id)
+    db.session.delete(tarifa)
+    db.session.commit()
+    
+    return jsonify({'success': True})
+
+@bp.route('/admin/reportes')
+def admin_reportes():
+    """Datos para reportes"""
+    hoy = datetime.utcnow().date()
+    hace_semana = hoy - timedelta(days=7)
+    hace_mes = hoy - timedelta(days=30)
+    
+    ingresos_hoy = db.session.query(func.sum(Movimiento.monto)).filter(
+        func.date(Movimiento.hora_entrada) == hoy,
+        Movimiento.pagado == True
+    ).scalar() or 0
+    
+    ingresos_semana = db.session.query(func.sum(Movimiento.monto)).filter(
+        func.date(Movimiento.hora_entrada) >= hace_semana,
+        Movimiento.pagado == True
+    ).scalar() or 0
+    
+    ingresos_mes = db.session.query(func.sum(Movimiento.monto)).filter(
+        func.date(Movimiento.hora_entrada) >= hace_mes,
+        Movimiento.pagado == True
+    ).scalar() or 0
+    
+    total_vehiculos = Movimiento.query.filter_by(pagado=True).count()
+    
+    return jsonify({
+        'ingresos_hoy': float(ingresos_hoy),
+        'ingresos_semana': float(ingresos_semana),
+        'ingresos_mes': float(ingresos_mes),
+        'total_vehiculos': total_vehiculos
+    })
+@bp.route('/mi-ticket/<token>')
+def ver_ticket(token):
+    """Vista pública para que el usuario vea su ticket al escanear el QR"""
+    
+    # Buscar el movimiento por token
+    movimiento = Movimiento.query.filter_by(token=token).first()
+    
+    if not movimiento:
+        return render_template('error.html',
+            mensaje='❌ Ticket no encontrado',
+            detalle='El código QR escaneado no es válido o ha expirado.')
+    
+    # Calcular tiempo transcurrido
+    ahora = datetime.utcnow()
+    
+    if movimiento.hora_salida:
+        # Ya salió
+        tiempo_total = movimiento.hora_salida - movimiento.hora_entrada
+        estado = 'finalizado'
+    else:
+        # Aún en el estacionamiento
+        tiempo_total = ahora - movimiento.hora_entrada
+        estado = 'activo'
+    
+    minutos_total = int(tiempo_total.total_seconds() / 60)
+    horas = minutos_total // 60
+    minutos = minutos_total % 60
+    
+    # Calcular monto actual si no ha salido
+    if not movimiento.hora_salida:
+        monto_actual = calcular_tarifa(minutos_total)
+    else:
+        monto_actual = movimiento.monto
+    
+    # Datos para el template
+    datos_ticket = {
+        'movimiento': movimiento,
+        'estado': estado,
+        'tiempo_texto': f'{horas}h {minutos}min',
+        'monto_actual': float(monto_actual) if monto_actual else 0,
+        'qr_base64': movimiento.qr_imagen,
+        'fecha_consulta': ahora  # ← AGREGAR ESTA LÍNEA
+    }
+    
+    return render_template('ver_ticket.html', **datos_ticket)
