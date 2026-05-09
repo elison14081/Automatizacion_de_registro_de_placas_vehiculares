@@ -2,12 +2,12 @@ from flask import Blueprint, render_template, request, jsonify, Response, curren
 from werkzeug.utils import secure_filename
 import os
 import cv2
+import numpy as np
 from datetime import datetime
 from app import db
 from app.models import Movimiento, Tarifa
 from app.ocr_service import OCRService
 from app.qr_service import QRService
-from app.whatsapp_service import WhatsAppService
 from sqlalchemy import func
 from datetime import timedelta
 
@@ -77,22 +77,29 @@ def procesar_imagen_placa():
 def video_feed():
     """Stream de video con detección de placas en tiempo real"""
     
+    # Inicializar el servicio de OCR dentro del contexto de la petición actual
+    ocr = get_ocr_service()
+    
     def generate():
-        ocr = get_ocr_service()
         ocr.iniciar_camara()
         
         while True:
             frame, placa = ocr.obtener_frame_con_deteccion()
             
             if frame is None:
-                break
-            
-            # Codificar frame a JPEG
-            ret, buffer = cv2.imencode('.jpg', frame)
-            frame_bytes = buffer.tobytes()
-            
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                # Retornar un frame negro con mensaje de error en lugar de crashear
+                frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(frame, "Esperando senal de camara...", (100, 240),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                
+                ret, buffer = cv2.imencode('.jpg', frame)
+                frame_bytes = buffer.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                
+                import time
+                time.sleep(1) # Esperar un segundo antes de reintentar
+                continue
     
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
@@ -101,88 +108,90 @@ def capturar_placa():
     """Captura y detecta placa desde la cámara en tiempo real"""
     
     ocr = get_ocr_service()
-    placa = ocr.capturar_placa()
+    res = ocr.capturar_placa()
     
-    if placa:
-        return jsonify({'placa': placa, 'success': True})
+    if res and res.get('plate_text') != 'INVALID_PLATE':
+        # Mantener compatibilidad con frontend agregando success y placa
+        res['success'] = True
+        res['placa'] = res['plate_text']
+        return jsonify(res)
     else:
-        return jsonify({'error': 'No se detectó placa', 'success': False}), 404
+        return jsonify({'error': 'No se detectó una placa válida', 'success': False}), 404
 
-@bp.route('/registro-placa', methods=['GET', 'POST'])
-def registro_placa():
-    if request.method == 'POST':
-        placa = request.form.get('placa', '').strip().upper()
-        numero_telefono = request.form.get('numero_telefono', '').strip()
-        
-        if not placa:
-            flash('Debe proporcionar una placa', 'error')
-            return redirect(url_for('main.registro_placa'))
-        
-        # Verificar si ya existe un movimiento activo
-        movimiento_activo = Movimiento.query.filter_by(
-            placa=placa,
-            hora_salida=None
-        ).first()
-        
-        if movimiento_activo:
-            return render_template('error.html',
-                mensaje='Esta placa ya tiene un registro de entrada activo',
-                movimiento=movimiento_activo)
-        
-        # Generar token y QR
-        qr_service = QRService()
-        token = qr_service.generar_token()
-        hora_entrada = datetime.utcnow()
-        
-        # Generar QR con URL de consulta
-        qr_base64 = qr_service.generar_qr_movimiento(
-            placa=placa,
-            token=token,
-            hora_entrada=hora_entrada,
-            numero_telefono=numero_telefono if numero_telefono else None
-        )
-        
-        # Crear movimiento
-        movimiento = Movimiento(
-            placa=placa,
-            token=token,
-            hora_entrada=hora_entrada,
-            qr_imagen=qr_base64,
-            numero_telefono=numero_telefono if numero_telefono else None
-        )
-        
-        db.session.add(movimiento)
-        db.session.commit()
-        
-        current_app.logger.info(f'Entrada registrada: Placa {placa}, Token {token}')
-        
-        # URL pública del ticket
-        url_ticket = url_for('main.ver_ticket', token=token, _external=True)
-        
-        # Intentar enviar por WhatsApp solo si hay número
-        envio_whatsapp = {'success': False, 'dev_mode': True}
-        
-        if numero_telefono:
-            whatsapp_service = WhatsAppService()
-            envio_whatsapp = whatsapp_service.enviar_qr_entrada(
-                numero=numero_telefono,
-                placa=placa,
-                qr_base64=qr_base64,
-                token=token
-            )
-            
-            if not envio_whatsapp.get('success'):
-                current_app.logger.warning(f"No se pudo enviar QR a {numero_telefono}: {envio_whatsapp.get('message')}")
-        else:
-            current_app.logger.info(f"Registro sin teléfono - QR solo en pantalla")
-        
-        return render_template('confirmacion_entrada.html',
-                             movimiento=movimiento,
-                             qr_base64=qr_base64,
-                             url_ticket=url_ticket,
-                             envio_whatsapp=envio_whatsapp)
+@bp.route('/configurar-camara', methods=['POST'])
+def configurar_camara():
+    """Cambia la fuente de la cámara (webcam local o IP externa)"""
+    data = request.get_json() or {}
+    url = data.get('url', '').strip()
     
-    return render_template('registro_placa.html')
+    if not url:
+        return jsonify({'success': False, 'error': 'URL de cámara no proporcionada'}), 400
+        
+    ocr = get_ocr_service()
+    exito = ocr.cambiar_camara(url)
+    
+    if exito:
+        return jsonify({'success': True, 'message': 'Cámara conectada correctamente'})
+    else:
+        # Volver a cámara por defecto si falla
+        ocr.cambiar_camara(0)
+        return jsonify({'success': False, 'error': 'No se pudo conectar a la cámara IP'}), 400
+
+@bp.route('/registro-placa', methods=['POST'])
+def registro_placa():
+    data = request.get_json() or {}
+    placa = data.get('placa', request.form.get('placa', '')).strip().upper()
+    
+    if not placa:
+        return jsonify({'success': False, 'error': 'Debe proporcionar una placa'}), 400
+    
+    # Verificar si ya existe un movimiento activo
+    movimiento_activo = Movimiento.query.filter_by(
+        placa=placa,
+        hora_salida=None
+    ).first()
+    
+    if movimiento_activo:
+        return jsonify({'success': False, 'error': 'Esta placa ya tiene un registro de entrada activo'}), 400
+    
+    # Generar token y QR
+    qr_service = QRService()
+    token = qr_service.generar_token()
+    hora_entrada = datetime.utcnow()
+    
+    # Generar QR con URL de consulta
+    qr_base64 = qr_service.generar_qr_movimiento(
+        placa=placa,
+        token=token,
+        hora_entrada=hora_entrada,
+        numero_telefono=None
+    )
+    
+    # Crear movimiento
+    movimiento = Movimiento(
+        placa=placa,
+        token=token,
+        hora_entrada=hora_entrada,
+        qr_imagen=qr_base64,
+        numero_telefono=None
+    )
+    
+    db.session.add(movimiento)
+    db.session.commit()
+    
+    current_app.logger.info(f'Entrada registrada: Placa {placa}, Token {token}')
+    
+    # URL pública del ticket
+    url_ticket = url_for('main.ver_ticket', token=token, _external=True)
+    
+    return jsonify({
+        'success': True,
+        'placa': placa,
+        'token': token,
+        'qr_base64': qr_base64,
+        'url_ticket': url_ticket,
+        'hora_entrada': hora_entrada.strftime('%Y-%m-%d %H:%M:%S')
+    })
 
 @bp.route('/detener-camara', methods=['POST'])
 def detener_camara():

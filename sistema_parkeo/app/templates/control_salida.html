@@ -1,503 +1,411 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Control de Salida - Sistema de Parkeo</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-  <style>
-    body {
-      background: #f5f5f5;
-    }
-    .container {
-      max-width: 900px;
-      margin: 20px auto;
-      padding: 20px;
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 30px;
-      padding-bottom: 20px;
-      border-bottom: 2px solid #FF9800;
-    }
-    .header h2 {
-      color: #FF9800;
-    }
-    .opciones-verificacion {
-      display: flex;
-      gap: 20px;
-      justify-content: center;
-      margin: 30px 0;
-    }
-    .opcion-card {
-      background: #f9f9f9;
-      border: 2px solid #ddd;
-      border-radius: 10px;
-      padding: 20px;
-      width: 250px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-    .opcion-card:hover {
-      border-color: #FF9800;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    .opcion-card.active {
-      border-color: #FF9800;
-      background: #fff3e0;
-    }
-    .opcion-icon {
-      font-size: 48px;
-      margin-bottom: 10px;
-    }
-    .metodo-container {
-      display: none;
-      margin-top: 30px;
-    }
-    .metodo-container.active {
-      display: block;
-    }
-    .video-container {
-      position: relative;
-      width: 100%;
-      max-width: 640px;
-      margin: 20px auto;
-    }
-    #video-stream {
-      width: 100%;
-      border: 2px solid #FF9800;
-      border-radius: 8px;
-    }
-    .upload-area {
-      border: 3px dashed #FF9800;
-      border-radius: 10px;
-      padding: 40px;
-      text-align: center;
-      margin: 20px auto;
-      max-width: 600px;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-    .upload-area:hover {
-      background: #fff3e0;
-    }
-    .preview-container {
-      max-width: 640px;
-      margin: 20px auto;
-      text-align: center;
-    }
-    #preview-image {
-      max-width: 100%;
-      border: 2px solid #FF9800;
-      border-radius: 8px;
-      margin-top: 10px;
-    }
-    .resultado-verificacion {
-      display: none;
-      margin: 30px 0;
-      padding: 30px;
-      border-radius: 10px;
-      text-align: center;
-    }
-    .resultado-verificacion.show {
-      display: block;
-    }
-    .resultado-autorizado {
-      background: #d4edda;
-      border: 3px solid #28a745;
-    }
-    .resultado-rechazado {
-      background: #f8d7da;
-      border: 3px solid #dc3545;
-    }
-    .resultado-sin-registro {
-      background: #fff3cd;
-      border: 3px solid #ffc107;
-    }
-    .resultado-icon {
-      font-size: 80px;
-      margin-bottom: 20px;
-    }
-    .placa-display {
-      font-size: 36px;
-      font-weight: bold;
-      letter-spacing: 3px;
-      margin: 20px 0;
-      padding: 15px;
-      background: white;
-      border-radius: 8px;
-    }
-    .info-movimiento {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      margin: 20px 0;
-      text-align: left;
-    }
-    .info-movimiento p {
-      margin: 10px 0;
-      font-size: 16px;
-    }
-    button {
-      background: #FF9800;
-      color: white;
-      padding: 12px 24px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 16px;
-      margin: 10px;
-      transition: all 0.3s;
-    }
-    button:hover {
-      background: #F57C00;
-      transform: translateY(-2px);
-    }
-    button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-      transform: none;
-    }
-    .btn-secondary {
-      background: #757575;
-    }
-    .btn-secondary:hover {
-      background: #616161;
-    }
-    .btn-success {
-      background: #4CAF50;
-    }
-    .btn-success:hover {
-      background: #45a049;
-    }
-    .btn-danger {
-      background: #f44336;
-    }
-    .btn-danger:hover {
-      background: #da190b;
-    }
-    .btn-volver {
-      background: #2196F3;
-    }
-    .btn-volver:hover {
-      background: #0b7dda;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h2>🚦 Control de Salida de Vehículos</h2>
-      <p>Verifica el estado de pago antes de autorizar la salida</p>
-    </div>
-    
-    <div style="text-align: center; margin-bottom: 20px;">
-      <a href="{{ url_for('main.index') }}" class="btn btn-volver">← Volver al Inicio</a>
-    </div>
+{% extends "base.html" %}
 
-    <!-- Opciones de verificación -->
-    <div class="opciones-verificacion">
-      <div class="opcion-card" id="opcion-imagen">
-        <div class="opcion-icon">📁</div>
-        <h3>Subir Imagen</h3>
-        <p>Foto de la placa</p>
-      </div>
-      <div class="opcion-card" id="opcion-camara">
-        <div class="opcion-icon">📷</div>
-        <h3>Usar Cámara</h3>
-        <p>Detección en vivo</p>
-      </div>
+{% block title %}Control de Salida - Centinela Vehicular{% endblock %}
+
+{% block extra_css %}
+<style>
+  .opciones-verificacion {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin: 30px 0;
+  }
+  .opcion-card {
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    padding: 20px;
+    width: 250px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .opcion-card:hover {
+    border-color: var(--warning);
+    box-shadow: var(--shadow-md);
+  }
+  .opcion-card.active {
+    border-color: var(--warning);
+    background: #fffbeb;
+  }
+  .opcion-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+  }
+  .metodo-container {
+    display: none;
+    margin-top: 30px;
+  }
+  .metodo-container.active {
+    display: block;
+  }
+  .video-container {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    margin: 20px auto;
+  }
+  #video-stream {
+    width: 100%;
+    border: 2px solid var(--warning);
+    border-radius: 8px;
+  }
+  .upload-area {
+    border: 3px dashed var(--warning);
+    border-radius: 10px;
+    padding: 40px;
+    text-align: center;
+    margin: 20px auto;
+    max-width: 600px;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .upload-area:hover {
+    background: #fffbeb;
+  }
+  .preview-container {
+    max-width: 640px;
+    margin: 20px auto;
+    text-align: center;
+  }
+  #preview-image {
+    max-width: 100%;
+    border: 2px solid var(--warning);
+    border-radius: 8px;
+    margin-top: 10px;
+  }
+  .resultado-verificacion {
+    display: none;
+    margin: 30px 0;
+    padding: 30px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: var(--shadow-md);
+  }
+  .resultado-verificacion.show {
+    display: block;
+  }
+  .resultado-autorizado {
+    background: #d1fae5;
+    border: 3px solid #10b981;
+  }
+  .resultado-rechazado {
+    background: #fee2e2;
+    border: 3px solid #ef4444;
+  }
+  .resultado-sin-registro {
+    background: #fef3c7;
+    border: 3px solid #f59e0b;
+  }
+  .resultado-icon {
+    font-size: 80px;
+    margin-bottom: 20px;
+  }
+  .placa-display {
+    font-size: 36px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    margin: 20px 0;
+    padding: 15px;
+    background: var(--card-bg);
+    border-radius: 8px;
+  }
+  .info-movimiento {
+    background: var(--card-bg);
+    padding: 20px;
+    border-radius: 8px;
+    margin: 20px 0;
+    text-align: left;
+  }
+  .info-movimiento p {
+    margin: 10px 0;
+    font-size: 16px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="text-center mb-4 border-b pb-4">
+    <h2 style="color: var(--warning);">🚦 Control de Salida de Vehículos</h2>
+    <p class="text-muted">Verifica el estado de pago antes de autorizar la salida</p>
+  </div>
+
+  <!-- Opciones de verificación -->
+  <div class="opciones-verificacion">
+    <div class="opcion-card" id="opcion-imagen">
+      <div class="opcion-icon">📁</div>
+      <h3>Subir Imagen</h3>
+      <p>Foto de la placa</p>
     </div>
-
-    <!-- Método 1: Subir Imagen -->
-    <div id="metodo-imagen" class="metodo-container">
-      <h3 style="text-align: center;">Subir Imagen de Placa</h3>
-      
-      <div class="upload-area" id="upload-area">
-        <p style="font-size: 48px; margin: 0;">📤</p>
-        <p>Haz clic o arrastra una imagen aquí</p>
-        <input type="file" id="file-input" accept="image/*" style="display: none;">
-      </div>
-
-      <div class="preview-container" id="preview-container" style="display: none;">
-        <h4>Vista previa:</h4>
-        <img id="preview-image" alt="Vista previa">
-        <div>
-          <button id="verificar-imagen-btn">Verificar Salida</button>
-          <button id="cambiar-imagen-btn" class="btn-secondary">Cambiar Imagen</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Método 2: Cámara en Tiempo Real -->
-    <div id="metodo-camara" class="metodo-container">
-      <h3 style="text-align: center;">Verificación en Tiempo Real</h3>
-      
-      <div class="video-container">
-        <img id="video-stream" src="" alt="Video en vivo" style="display: none;">
-      </div>
-      
-      <div style="text-align: center;">
-        <button id="iniciar-camara-btn">Iniciar Cámara</button>
-        <button id="detener-camara-btn" style="display: none;" class="btn-secondary">Detener Cámara</button>
-        <button id="capturar-salida-btn" style="display: none;">Verificar Salida</button>
-      </div>
-    </div>
-
-    <!-- Resultado de la verificación -->
-    <div class="resultado-verificacion" id="resultado-autorizado">
-      <div class="resultado-icon">✅</div>
-      <h2 style="color: #28a745;">SALIDA AUTORIZADA</h2>
-      <p style="font-size: 20px; margin: 20px 0;">El vehículo ha pagado correctamente</p>
-      
-      <div class="placa-display" id="placa-autorizada" style="color: #28a745;"></div>
-      
-      <div class="info-movimiento" id="info-autorizada"></div>
-      
-      <button id="btn-confirmar-salida" class="btn-success">Confirmar Salida</button>
-      <button id="btn-cancelar-autorizado" class="btn-secondary">Nueva Verificación</button>
-    </div>
-
-    <div class="resultado-verificacion" id="resultado-rechazado">
-      <div class="resultado-icon">❌</div>
-      <h2 style="color: #dc3545;">SALIDA NO AUTORIZADA</h2>
-      <p style="font-size: 20px; margin: 20px 0;">El vehículo NO ha realizado el pago</p>
-      
-      <div class="placa-display" id="placa-rechazada" style="color: #dc3545;"></div>
-      
-      <div class="info-movimiento" id="info-rechazada"></div>
-      
-      <p style="color: #721c24; font-weight: bold; font-size: 18px;">
-        ⚠️ Debe dirigirse a caja para realizar el pago
-      </p>
-      
-      <button id="btn-cancelar-rechazado" class="btn-secondary">Nueva Verificación</button>
-    </div>
-
-    <div class="resultado-verificacion" id="resultado-sin-registro">
-      <div class="resultado-icon">⚠️</div>
-      <h2 style="color: #856404;">SIN REGISTRO DE ENTRADA</h2>
-      <p style="font-size: 20px; margin: 20px 0;">No hay registro de entrada para este vehículo</p>
-      
-      <div class="placa-display" id="placa-sin-registro" style="color: #856404;"></div>
-      
-      <p style="color: #856404; font-weight: bold;">
-        Este vehículo no tiene un registro de entrada activo en el sistema
-      </p>
-      
-      <button id="btn-cancelar-sin-registro" class="btn-secondary">Nueva Verificación</button>
+    <div class="opcion-card" id="opcion-camara">
+      <div class="opcion-icon">📷</div>
+      <h3>Usar Cámara</h3>
+      <p>Detección en vivo</p>
     </div>
   </div>
 
-  <script>
-    let metodoActual = null;
-    let camaraActiva = false;
-    let movimientoActual = null;
+  <!-- Método 1: Subir Imagen -->
+  <div id="metodo-imagen" class="metodo-container">
+    <h3 class="text-center">Subir Imagen de Placa</h3>
+    <div class="upload-area" id="upload-area">
+      <p style="font-size: 48px; margin: 0;">📤</p>
+      <p>Haz clic o arrastra una imagen aquí</p>
+      <input type="file" id="file-input" accept="image/*" style="display: none;">
+    </div>
+    <div class="preview-container" id="preview-container" style="display: none;">
+      <h4>Vista previa:</h4>
+      <img id="preview-image" alt="Vista previa">
+      <div class="mt-4">
+        <button id="verificar-imagen-btn" class="btn btn-warning" style="background-color: var(--warning); color: white;">Verificar Salida</button>
+        <button id="cambiar-imagen-btn" class="btn btn-secondary">Cambiar Imagen</button>
+      </div>
+    </div>
+  </div>
 
-    // Selección de método
-    document.getElementById('opcion-imagen').onclick = () => activarMetodo('imagen');
-    document.getElementById('opcion-camara').onclick = () => activarMetodo('camara');
+  <!-- Método 2: Cámara en Tiempo Real -->
+  <div id="metodo-camara" class="metodo-container">
+    <h3 class="text-center">Verificación en Tiempo Real</h3>
+    <div class="video-container">
+      <img id="video-stream" src="" alt="Video en vivo" style="display: none;">
+    </div>
+    <div class="text-center mt-4">
+      <button id="iniciar-camara-btn" class="btn btn-primary">Iniciar Cámara</button>
+      <button id="detener-camara-btn" style="display: none;" class="btn btn-secondary">Detener Cámara</button>
+      <button id="capturar-salida-btn" style="display: none; background-color: var(--warning); color: white;" class="btn">Verificar Salida</button>
+    </div>
+  </div>
 
-    function activarMetodo(metodo) {
-      document.querySelectorAll('.opcion-card').forEach(card => card.classList.remove('active'));
-      document.querySelectorAll('.metodo-container').forEach(container => container.classList.remove('active'));
-      ocultarResultados();
+  <!-- Resultados de verificación -->
+  <div class="resultado-verificacion resultado-autorizado" id="resultado-autorizado">
+    <div class="resultado-icon">✅</div>
+    <h2 style="color: #10b981;">SALIDA AUTORIZADA</h2>
+    <p style="font-size: 20px; margin: 20px 0;">El vehículo ha pagado correctamente</p>
+    <div class="placa-display" id="placa-autorizada" style="color: #10b981;"></div>
+    <div class="info-movimiento" id="info-autorizada"></div>
+    <div class="mt-4">
+      <button id="btn-confirmar-salida" class="btn btn-primary">Confirmar Salida</button>
+      <button id="btn-cancelar-autorizado" class="btn btn-secondary">Nueva Verificación</button>
+    </div>
+  </div>
 
-      if (metodo === 'imagen') {
-        document.getElementById('opcion-imagen').classList.add('active');
-        document.getElementById('metodo-imagen').classList.add('active');
+  <div class="resultado-verificacion resultado-rechazado" id="resultado-rechazado">
+    <div class="resultado-icon">❌</div>
+    <h2 style="color: #ef4444;">SALIDA NO AUTORIZADA</h2>
+    <p style="font-size: 20px; margin: 20px 0;">El vehículo NO ha realizado el pago</p>
+    <div class="placa-display" id="placa-rechazada" style="color: #ef4444;"></div>
+    <div class="info-movimiento" id="info-rechazada"></div>
+    <p style="color: #991b1b; font-weight: bold; font-size: 18px;" class="mt-4">
+      ⚠️ Debe dirigirse a caja para realizar el pago
+    </p>
+    <div class="mt-4">
+      <button id="btn-cancelar-rechazado" class="btn btn-secondary">Nueva Verificación</button>
+    </div>
+  </div>
+
+  <div class="resultado-verificacion resultado-sin-registro" id="resultado-sin-registro">
+    <div class="resultado-icon">⚠️</div>
+    <h2 style="color: #f59e0b;">SIN REGISTRO DE ENTRADA</h2>
+    <p style="font-size: 20px; margin: 20px 0;">No hay registro de entrada para este vehículo</p>
+    <div class="placa-display" id="placa-sin-registro" style="color: #f59e0b;"></div>
+    <p style="color: #92400e; font-weight: bold;" class="mt-4">
+      Este vehículo no tiene un registro de entrada activo en el sistema
+    </p>
+    <div class="mt-4">
+      <button id="btn-cancelar-sin-registro" class="btn btn-secondary">Nueva Verificación</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  let metodoActual = null;
+  let camaraActiva = false;
+  let movimientoActual = null;
+
+  document.getElementById('opcion-imagen').onclick = () => activarMetodo('imagen');
+  document.getElementById('opcion-camara').onclick = () => activarMetodo('camara');
+
+  function activarMetodo(metodo) {
+    document.querySelectorAll('.opcion-card').forEach(card => card.classList.remove('active'));
+    document.querySelectorAll('.metodo-container').forEach(container => container.classList.remove('active'));
+    ocultarResultados();
+
+    if (metodo === 'imagen') {
+      document.getElementById('opcion-imagen').classList.add('active');
+      document.getElementById('metodo-imagen').classList.add('active');
+      detenerCamara();
+    } else {
+      document.getElementById('opcion-camara').classList.add('active');
+      document.getElementById('metodo-camara').classList.add('active');
+    }
+    metodoActual = metodo;
+  }
+
+  // ==== MÉTODO 1: SUBIR IMAGEN ====
+  const uploadArea = document.getElementById('upload-area');
+  const fileInput = document.getElementById('file-input');
+  const previewContainer = document.getElementById('preview-container');
+  const previewImage = document.getElementById('preview-image');
+
+  uploadArea.onclick = () => fileInput.click();
+  uploadArea.ondragover = (e) => { e.preventDefault(); uploadArea.style.background = '#fffbeb'; };
+  uploadArea.ondragleave = () => { uploadArea.style.background = ''; };
+  uploadArea.ondrop = (e) => {
+    e.preventDefault();
+    uploadArea.style.background = '';
+    if (e.dataTransfer.files.length) {
+      fileInput.files = e.dataTransfer.files;
+      mostrarPreview(e.dataTransfer.files[0]);
+    }
+  };
+
+  fileInput.onchange = (e) => {
+    if (e.target.files.length) mostrarPreview(e.target.files[0]);
+  };
+
+  function mostrarPreview(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      previewImage.src = e.target.result;
+      uploadArea.style.display = 'none';
+      previewContainer.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  document.getElementById('cambiar-imagen-btn').onclick = () => {
+    uploadArea.style.display = 'block';
+    previewContainer.style.display = 'none';
+    fileInput.value = '';
+    ocultarResultados();
+  };
+
+  document.getElementById('verificar-imagen-btn').onclick = () => {
+    const formData = new FormData();
+    formData.append('imagen', fileInput.files[0]);
+    
+    const btn = document.getElementById('verificar-imagen-btn');
+    btn.disabled = true;
+    btn.textContent = 'Verificando...';
+
+    fetch('/verificar-salida-imagen', { method: 'POST', body: formData })
+      .then(resp => resp.json())
+      .then(data => {
+        btn.disabled = false;
+        btn.textContent = 'Verificar Salida';
+        mostrarResultado(data);
+      })
+      .catch(error => {
+        btn.disabled = false;
+        btn.textContent = 'Verificar Salida';
+        alert('Error: ' + error);
+      });
+  };
+
+  // ==== MÉTODO 2: CÁMARA ====
+  const videoStream = document.getElementById('video-stream');
+  const iniciarCamaraBtn = document.getElementById('iniciar-camara-btn');
+  const detenerCamaraBtn = document.getElementById('detener-camara-btn');
+  const capturarSalidaBtn = document.getElementById('capturar-salida-btn');
+
+  iniciarCamaraBtn.onclick = () => {
+    videoStream.src = "{{ url_for('main.video_feed') }}";
+    videoStream.style.display = 'block';
+    camaraActiva = true;
+    iniciarCamaraBtn.style.display = 'none';
+    detenerCamaraBtn.style.display = 'inline-block';
+    capturarSalidaBtn.style.display = 'inline-block';
+  };
+
+  function detenerCamara() {
+    if (camaraActiva) {
+      fetch('/detener-camara', { method: 'POST' });
+      videoStream.src = '';
+      videoStream.style.display = 'none';
+      camaraActiva = false;
+      iniciarCamaraBtn.style.display = 'inline-block';
+      detenerCamaraBtn.style.display = 'none';
+      capturarSalidaBtn.style.display = 'none';
+    }
+  }
+
+  detenerCamaraBtn.onclick = detenerCamara;
+
+  capturarSalidaBtn.onclick = () => {
+    const btn = capturarSalidaBtn;
+    btn.disabled = true;
+    btn.textContent = 'Verificando...';
+    
+    fetch('/capturar-salida', { method: 'POST' })
+      .then(resp => resp.json())
+      .then(data => {
+        btn.disabled = false;
+        btn.textContent = 'Verificar Salida';
+        mostrarResultado(data);
         detenerCamara();
-      } else {
-        document.getElementById('opcion-camara').classList.add('active');
-        document.getElementById('metodo-camara').classList.add('active');
-      }
-      
-      metodoActual = metodo;
+      })
+      .catch(error => {
+        btn.disabled = false;
+        btn.textContent = 'Verificar Salida';
+        alert('Error: ' + error);
+      });
+  };
+
+  // ==== MOSTRAR RESULTADOS ====
+  function mostrarResultado(data) {
+    ocultarResultados();
+    if (data.motivo === 'sin_registro') {
+      document.getElementById('placa-sin-registro').textContent = data.placa;
+      document.getElementById('resultado-sin-registro').classList.add('show');
+    } else if (data.puede_salir) {
+      movimientoActual = data.movimiento;
+      document.getElementById('placa-autorizada').textContent = data.placa;
+      document.getElementById('info-autorizada').innerHTML = `
+        <p><strong>🎫 Token:</strong> ${data.movimiento.token}</p>
+        <p><strong>🕐 Hora de entrada:</strong> ${data.movimiento.hora_entrada}</p>
+        <p><strong>💰 Monto pagado:</strong> S/ ${data.movimiento.monto.toFixed(2)}</p>
+      `;
+      document.getElementById('resultado-autorizado').classList.add('show');
+    } else {
+      movimientoActual = data.movimiento;
+      document.getElementById('placa-rechazada').textContent = data.placa;
+      document.getElementById('info-rechazada').innerHTML = `
+        <p><strong>🎫 Token:</strong> ${data.movimiento.token}</p>
+        <p><strong>🕐 Hora de entrada:</strong> ${data.movimiento.hora_entrada}</p>
+        <p><strong>💰 Monto a pagar:</strong> Pendiente</p>
+      `;
+      document.getElementById('resultado-rechazado').classList.add('show');
     }
+  }
 
-    // ==== MÉTODO 1: SUBIR IMAGEN ====
-    const uploadArea = document.getElementById('upload-area');
-    const fileInput = document.getElementById('file-input');
-    const previewContainer = document.getElementById('preview-container');
-    const previewImage = document.getElementById('preview-image');
+  function ocultarResultados() {
+    document.querySelectorAll('.resultado-verificacion').forEach(r => r.classList.remove('show'));
+    movimientoActual = null;
+  }
 
-    uploadArea.onclick = () => fileInput.click();
-    uploadArea.ondragover = (e) => { e.preventDefault(); uploadArea.style.background = '#fff3e0'; };
-    uploadArea.ondragleave = () => { uploadArea.style.background = ''; };
-    uploadArea.ondrop = (e) => {
-      e.preventDefault();
-      uploadArea.style.background = '';
-      if (e.dataTransfer.files.length) {
-        fileInput.files = e.dataTransfer.files;
-        mostrarPreview(e.dataTransfer.files[0]);
-      }
-    };
-
-    fileInput.onchange = (e) => {
-      if (e.target.files.length) mostrarPreview(e.target.files[0]);
-    };
-
-    function mostrarPreview(file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        previewImage.src = e.target.result;
-        uploadArea.style.display = 'none';
-        previewContainer.style.display = 'block';
-      };
-      reader.readAsDataURL(file);
-    }
-
-    document.getElementById('cambiar-imagen-btn').onclick = () => {
-      uploadArea.style.display = 'block';
-      previewContainer.style.display = 'none';
-      fileInput.value = '';
-      ocultarResultados();
-    };
-
-    document.getElementById('verificar-imagen-btn').onclick = () => {
-      const formData = new FormData();
-      formData.append('imagen', fileInput.files[0]);
-      
-      const btn = document.getElementById('verificar-imagen-btn');
-      btn.disabled = true;
-      btn.textContent = 'Verificando...';
-
-      fetch('/verificar-salida-imagen', { method: 'POST', body: formData })
+  document.getElementById('btn-confirmar-salida').onclick = () => {
+    if (!movimientoActual) return;
+    if (confirm('¿Confirmar salida del vehículo?')) {
+      fetch(`/autorizar-salida/${movimientoActual.id}`, { method: 'POST' })
         .then(resp => resp.json())
         .then(data => {
-          btn.disabled = false;
-          btn.textContent = 'Verificar Salida';
-          mostrarResultado(data);
+          if (data.success) {
+            alert('✅ Salida registrada correctamente');
+            location.reload();
+          } else alert('Error: ' + data.error);
         })
-        .catch(error => {
-          btn.disabled = false;
-          btn.textContent = 'Verificar Salida';
-          alert('Error: ' + error);
-        });
-    };
-
-    // ==== MÉTODO 2: CÁMARA ====
-    const videoStream = document.getElementById('video-stream');
-    const iniciarCamaraBtn = document.getElementById('iniciar-camara-btn');
-    const detenerCamaraBtn = document.getElementById('detener-camara-btn');
-    const capturarSalidaBtn = document.getElementById('capturar-salida-btn');
-
-    iniciarCamaraBtn.onclick = () => {
-      videoStream.src = "{{ url_for('main.video_feed') }}";
-      videoStream.style.display = 'block';
-      camaraActiva = true;
-      iniciarCamaraBtn.style.display = 'none';
-      detenerCamaraBtn.style.display = 'inline-block';
-      capturarSalidaBtn.style.display = 'inline-block';
-    };
-
-    detenerCamaraBtn.onclick = detenerCamara;
-
-    function detenerCamara() {
-      if (camaraActiva) {
-        fetch('/detener-camara', { method: 'POST' });
-        videoStream.src = '';
-        videoStream.style.display = 'none';
-        camaraActiva = false;
-        iniciarCamaraBtn.style.display = 'inline-block';
-        detenerCamaraBtn.style.display = 'none';
-        capturarSalidaBtn.style.display = 'none';
-      }
+        .catch(error => alert('Error: ' + error));
     }
+  };
 
-    capturarSalidaBtn.onclick = () => {
-      const btn = capturarSalidaBtn;
-      btn.disabled = true;
-      btn.textContent = 'Verificando...';
-      
-      fetch('/capturar-salida', { method: 'POST' })
-        .then(resp => resp.json())
-        .then(data => {
-          btn.disabled = false;
-          btn.textContent = 'Verificar Salida';
-          mostrarResultado(data);
-          detenerCamara();
-        })
-        .catch(error => {
-          btn.disabled = false;
-          btn.textContent = 'Verificar Salida';
-          alert('Error: ' + error);
-        });
-    };
+  document.getElementById('btn-cancelar-autorizado').onclick = () => { ocultarResultados(); activarMetodo(metodoActual); };
+  document.getElementById('btn-cancelar-rechazado').onclick = () => { ocultarResultados(); activarMetodo(metodoActual); };
+  document.getElementById('btn-cancelar-sin-registro').onclick = () => { ocultarResultados(); activarMetodo(metodoActual); };
 
-    // ==== MOSTRAR RESULTADOS ====
-    function mostrarResultado(data) {
-      ocultarResultados();
-      
-      if (data.motivo === 'sin_registro') {
-        document.getElementById('placa-sin-registro').textContent = data.placa;
-        document.getElementById('resultado-sin-registro').classList.add('show');
-      } else if (data.puede_salir) {
-        movimientoActual = data.movimiento;
-        document.getElementById('placa-autorizada').textContent = data.placa;
-        document.getElementById('info-autorizada').innerHTML = `
-          <p><strong>🎫 Token:</strong> ${data.movimiento.token}</p>
-          <p><strong>🕐 Hora de entrada:</strong> ${data.movimiento.hora_entrada}</p>
-          <p><strong>💰 Monto pagado:</strong> S/ ${data.movimiento.monto.toFixed(2)}</p>
-        `;
-        document.getElementById('resultado-autorizado').classList.add('show');
-      } else {
-        movimientoActual = data.movimiento;
-        document.getElementById('placa-rechazada').textContent = data.placa;
-        document.getElementById('info-rechazada').innerHTML = `
-          <p><strong>🎫 Token:</strong> ${data.movimiento.token}</p>
-          <p><strong>🕐 Hora de entrada:</strong> ${data.movimiento.hora_entrada}</p>
-          <p><strong>💰 Monto a pagar:</strong> Pendiente</p>
-        `;
-        document.getElementById('resultado-rechazado').classList.add('show');
-      }
-    }
-
-    function ocultarResultados() {
-      document.querySelectorAll('.resultado-verificacion').forEach(r => r.classList.remove('show'));
-      movimientoActual = null;
-    }
-
-    // Confirmar salida
-    document.getElementById('btn-confirmar-salida').onclick = () => {
-      if (!movimientoActual) return;
-      
-      if (confirm('¿Confirmar salida del vehículo?')) {
-        fetch(`/autorizar-salida/${movimientoActual.id}`, { method: 'POST' })
-          .then(resp => resp.json())
-          .then(data => {
-            if (data.success) {
-              alert('✅ Salida registrada correctamente');
-              location.reload();
-            } else {
-              alert('Error: ' + data.error);
-            }
-          })
-          .catch(error => alert('Error: ' + error));
-      }
-    };
-
-    // Botones cancelar
-    document.getElementById('btn-cancelar-autorizado').onclick = () => {
-      ocultarResultados();
-      activarMetodo(metodoActual);
-    };
-    document.getElementById('btn-cancelar-rechazado').onclick = () => {
-      ocultarResultados();
-      activarMetodo(metodoActual);
-    };
-    document.getElementById('btn-cancelar-sin-registro').onclick = () => {
-      ocultarResultados();
-      activarMetodo(metodoActual);
-    };
-
-    window.onbeforeunload = () => {
-      if (camaraActiva) detenerCamara();
-    };
-  </script>
-</body>
-</html>
+  window.onbeforeunload = () => {
+    if (camaraActiva) detenerCamara();
+  };
+</script>
+{% endblock %}
