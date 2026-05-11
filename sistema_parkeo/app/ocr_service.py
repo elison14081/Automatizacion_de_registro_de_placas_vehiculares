@@ -49,15 +49,20 @@ class OCRService:
         return thresh
 
     def _validar_placa(self, texto):
-        """Validación Regex para el contexto peruano AAP"""
+        """Validación de texto detectado - modo abierto para pruebas"""
         texto_limpio = ''.join(filter(str.isalnum, texto)).upper()
         
+        if len(texto_limpio) < 2:
+            return "INVALID_PLATE", "UNKNOWN"
+        
+        # Clasificación (sin bloquear detección)
         if self.regex_standard.match(texto_limpio):
             return texto_limpio, "PARTICULAR_COMERCIAL"
         elif self.regex_moto1.match(texto_limpio) or self.regex_moto2.match(texto_limpio):
             return texto_limpio, "MOTO_MOTOTAXI"
             
-        return "INVALID_PLATE", "UNKNOWN"
+        # Aceptar cualquier texto detectado para pruebas
+        return texto_limpio, "DETECTADO"
     
     def _procesar_frame(self, frame):
         """Procesa un frame y extrae la placa en formato JSON"""
@@ -225,11 +230,15 @@ class OCRService:
                 return res_cache
                 
         # Si el caché está vacío o caducó, intentamos capturar un frame nuevo
-        if self.cap is None or not self.cap.isOpened():
+        # Usar obtener_frame_con_deteccion que soporta tanto webcam como IP
+        frame, placa = self.obtener_frame_con_deteccion()
+        if frame is None:
             return None
             
-        ret, frame = self.cap.read()
-        if not ret:
-            return None
+        # Si se detectó placa en el frame, el caché ya fue actualizado
+        if self.ultima_placa:
+            res = self.ultima_placa
+            self.ultima_placa = None
+            return res
             
-        return self._procesar_frame(frame)
+        return None

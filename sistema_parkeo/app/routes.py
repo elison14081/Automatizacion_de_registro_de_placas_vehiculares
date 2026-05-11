@@ -81,25 +81,31 @@ def video_feed():
     ocr = get_ocr_service()
     
     def generate():
+        import time
         ocr.iniciar_camara()
         
         while True:
-            frame, placa = ocr.obtener_frame_con_deteccion()
-            
-            if frame is None:
-                # Retornar un frame negro con mensaje de error en lugar de crashear
-                frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.putText(frame, "Esperando senal de camara...", (100, 240),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+            try:
+                frame, placa = ocr.obtener_frame_con_deteccion()
                 
+                if frame is None:
+                    # Retornar un frame negro con mensaje de error en lugar de crashear
+                    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(frame, "Esperando senal de camara...", (100, 240),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                    time.sleep(1)
+                
+                # Codificar y enviar el frame (tanto válido como de error)
                 ret, buffer = cv2.imencode('.jpg', frame)
+                if not ret:
+                    continue
+                    
                 frame_bytes = buffer.tobytes()
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                
-                import time
-                time.sleep(1) # Esperar un segundo antes de reintentar
-                continue
+            except Exception as e:
+                print(f"[VIDEO FEED] Error en generador: {e}")
+                time.sleep(1)
     
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
@@ -110,13 +116,12 @@ def capturar_placa():
     ocr = get_ocr_service()
     res = ocr.capturar_placa()
     
-    if res and res.get('plate_text') != 'INVALID_PLATE':
-        # Mantener compatibilidad con frontend agregando success y placa
+    if res:
         res['success'] = True
-        res['placa'] = res['plate_text']
+        res['placa'] = res.get('plate_text', '')
         return jsonify(res)
     else:
-        return jsonify({'error': 'No se detectó una placa válida', 'success': False}), 404
+        return jsonify({'error': 'No se detectó una placa', 'success': False}), 404
 
 @bp.route('/configurar-camara', methods=['POST'])
 def configurar_camara():
