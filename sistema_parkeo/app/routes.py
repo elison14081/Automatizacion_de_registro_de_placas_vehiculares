@@ -485,6 +485,11 @@ def calcular_tarifa(minutos):
 
 # ========== RUTAS DE ADMINISTRACIÓN ==========
 
+@bp.route('/estacionamiento')
+def estacionamiento():
+    """Vista del mapa visual de espacios de estacionamiento"""
+    return render_template('estacionamiento.html')
+
 @bp.route('/administracion')
 def administracion():
     """Vista principal de administración"""
