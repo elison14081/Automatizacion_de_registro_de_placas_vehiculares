@@ -13,6 +13,48 @@ from datetime import timedelta
 
 bp = Blueprint('main', __name__)
 
+# ─ Normalización de placa con tolerancia OCR ───────────────────────
+
+_OCR_EQUIV = str.maketrans('01lI', 'OOLI')   # 0→O, 1→O, l→L, I→I (normaliza)
+
+def _normalizar(placa: str) -> str:
+    """Normaliza una placa para comparación fuzzy."""
+    return placa.upper().translate(_OCR_EQUIV).replace('-', '').replace(' ', '')
+
+def _levenshtein(a: str, b: str) -> int:
+    """Distancia de edición entre dos strings."""
+    if len(a) < len(b):
+        return _levenshtein(b, a)
+    if not b:
+        return len(a)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        curr = [i]
+        for j, cb in enumerate(b, 1):
+            curr.append(min(prev[j] + 1, curr[j-1] + 1, prev[j-1] + (ca != cb)))
+        prev = curr
+    return prev[-1]
+
+def buscar_placa_activa_similar(placa_ocr: str, umbral: int = 2):
+    """
+    Busca un movimiento activo cuya placa sea similar a placa_ocr
+    (distancia Levenshtein ≤ umbral sobre versiones normalizadas).
+    Retorna (movimiento, placa_bd) o (None, None).
+    """
+    norm_ocr = _normalizar(placa_ocr)
+    activos = Movimiento.query.filter_by(hora_salida=None).all()
+    mejor = None
+    mejor_dist = umbral + 1
+    for m in activos:
+        dist = _levenshtein(norm_ocr, _normalizar(m.placa))
+        if dist < mejor_dist:
+            mejor_dist = dist
+            mejor = m
+    if mejor and mejor_dist <= umbral:
+        return mejor, mejor.placa
+    return None, None
+
+
 # Instancia global del servicio OCR
 ocr_service = None
 
@@ -29,13 +71,87 @@ def allowed_file(filename):
 @bp.route('/')
 def index():
     """Página principal del sistema"""
-    return render_template('index.html')
+    import json
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'instance', 'config.json')
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+        capacidad = int(cfg.get('capacidad', 60))
+    except Exception:
+        capacidad = 60
+
+    try:
+        ocupadas = Movimiento.query.filter_by(hora_salida=None).count()
+    except Exception:
+        ocupadas = 0
+
+    disponibles = max(0, capacidad - ocupadas)
+    porcentaje = int((ocupadas / capacidad) * 100) if capacidad > 0 else 0
+
+    return render_template('index.html',
+                           ocupadas=ocupadas,
+                           disponibles=disponibles,
+                           porcentaje=porcentaje,
+                           capacidad=capacidad)
+
+@bp.route('/estado-camara')
+def estado_camara():
+    """Devuelve si la cámara sigue activa en el servidor"""
+    ocr = get_ocr_service()
+    activa = ocr.fuente_camara is not None
+    return jsonify({'activa': activa, 'fuente': str(ocr.fuente_camara) if activa else None})
+
+# ── Páginas independientes ─────────────────────────────────────────────────────
+
+@bp.route('/historial')
+def historial():
+    """Página dedicada de historial de registros"""
+    return render_template('historial.html')
+
+@bp.route('/cobros')
+def cobros():
+    """Página de cobros: dashboard financiero + configuración de tarifas"""
+    return render_template('cobros.html')
+
+@bp.route('/tarifas')
+def tarifas():
+    """Página dedicada de gestión de tarifas"""
+    return render_template('tarifas.html')
+
+@bp.route('/configuracion')
+def configuracion():
+    """Página dedicada de configuración del sistema"""
+    import json
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'instance', 'config.json')
+    config = {}
+    try:
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+    except Exception:
+        config = {}
+    return render_template('configuracion.html', config=config)
+
+@bp.route('/admin/configuracion', methods=['POST'])
+def guardar_configuracion():
+    """Guarda la configuración del local en un archivo JSON"""
+    import json
+    data = request.get_json()
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'instance', 'config.json')
+    try:
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # ELIMINAR ESTA FUNCIÓN (líneas 26-28 aproximadamente)
 # @bp.route('/registro-placa')
 # def registro_placa():
 #     """Vista para registrar entrada de vehículos"""
 #     return render_template('registro_placa.html')
+
 
 @bp.route('/procesar-imagen-placa', methods=['POST'])
 def procesar_imagen_placa():
@@ -150,21 +266,41 @@ def registro_placa():
     if not placa:
         return jsonify({'success': False, 'error': 'Debe proporcionar una placa'}), 400
     
-    # Verificar si ya existe un movimiento activo
-    movimiento_activo = Movimiento.query.filter_by(
-        placa=placa,
-        hora_salida=None
-    ).first()
+    # Buscar movimiento activo: primero coincidencia exacta, luego fuzzy
+    movimiento_activo = Movimiento.query.filter_by(placa=placa, hora_salida=None).first()
+    placa_bd = placa
+    if not movimiento_activo:
+        movimiento_activo, placa_bd = buscar_placa_activa_similar(placa)
     
     if movimiento_activo:
-        return jsonify({'success': False, 'error': 'Esta placa ya tiene un registro de entrada activo'}), 400
+        # Segunda detección → calcular cobro y devolver datos de boleta
+        tiempo_transcurrido = datetime.utcnow() - movimiento_activo.hora_entrada
+        minutos = int(tiempo_transcurrido.total_seconds() / 60)
+        monto = calcular_tarifa(minutos)
+        movimiento_activo.monto = monto
+        db.session.commit()
+        current_app.logger.info(
+            f'Checkout detectado: OCR={placa} → BD={placa_bd} '
+            f'(distancia={_levenshtein(_normalizar(placa), _normalizar(placa_bd))})'
+        )
+        return jsonify({
+            'success': False,
+            'checkout': True,
+            'movimiento_id': movimiento_activo.id,
+            'placa': placa_bd,           # mostramos la placa original registrada
+            'placa_ocr': placa,          # y la que detectó el OCR
+            'hora_entrada': movimiento_activo.hora_entrada.strftime('%d/%m/%Y %H:%M:%S'),
+            'tiempo': f'{minutos // 60}h {minutos % 60:02d}min',
+            'minutos': minutos,
+            'monto': float(monto),
+            'token': movimiento_activo.token
+        })
     
-    # Generar token y QR
+    # Primera detección → registrar entrada
     qr_service = QRService()
     token = qr_service.generar_token()
     hora_entrada = datetime.utcnow()
     
-    # Generar QR con URL de consulta
     qr_base64 = qr_service.generar_qr_movimiento(
         placa=placa,
         token=token,
@@ -172,7 +308,6 @@ def registro_placa():
         numero_telefono=None
     )
     
-    # Crear movimiento
     movimiento = Movimiento(
         placa=placa,
         token=token,
@@ -186,11 +321,11 @@ def registro_placa():
     
     current_app.logger.info(f'Entrada registrada: Placa {placa}, Token {token}')
     
-    # URL pública del ticket
     url_ticket = url_for('main.ver_ticket', token=token, _external=True)
     
     return jsonify({
         'success': True,
+        'checkout': False,
         'placa': placa,
         'token': token,
         'qr_base64': qr_base64,
@@ -571,7 +706,7 @@ def admin_vehiculos_activos():
 def admin_historial():
     """Historial completo de movimientos"""
     movimientos = Movimiento.query.order_by(Movimiento.hora_entrada.desc()).limit(100).all()
-    
+
     data = []
     for m in movimientos:
         duracion = None
@@ -579,7 +714,7 @@ def admin_historial():
             tiempo = m.hora_salida - m.hora_entrada
             minutos = int(tiempo.total_seconds() / 60)
             duracion = f'{minutos // 60}h {minutos % 60}min'
-        
+
         data.append({
             'id': m.id,
             'placa': m.placa,
@@ -589,8 +724,35 @@ def admin_historial():
             'pagado': m.pagado,
             'monto': float(m.monto) if m.monto else 0
         })
-    
+
     return jsonify(data)
+
+@bp.route('/admin/movimiento/<int:id>', methods=['DELETE'])
+def eliminar_movimiento(id):
+    """Elimina un registro de movimiento por ID"""
+    movimiento = Movimiento.query.get(id)
+    if not movimiento:
+        return jsonify({'success': False, 'error': 'Registro no encontrado'}), 404
+    try:
+        db.session.delete(movimiento)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+@bp.route('/admin/movimientos/limpiar', methods=['DELETE'])
+def limpiar_movimientos():
+    """Elimina TODOS los registros de movimientos"""
+    try:
+        count = Movimiento.query.count()
+        Movimiento.query.delete()
+        db.session.commit()
+        return jsonify({'success': True, 'eliminados': count})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
 
 @bp.route('/admin/tarifas')
 def admin_tarifas():

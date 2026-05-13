@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}Cobros &mdash; Centinela Vehicular{% endblock %}
+{% block header_title %}Cobros &amp; Finanzas{% endblock %}
+
+{% block extra_css %}
+<style>
+    .kpi-card { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px -5px rgba(0,0,0,0.1); }
+    .tab-btn.active { background: #38bdf8; color: #fff; }
+    .tab-btn { transition: all 0.15s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    .fade-in { animation: fadeIn 0.25s ease forwards; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="kpi-card bg-white rounded-xl border border-border p-4">
+            <div class="flex items-center justify-between mb-3">
+                <p class="text-xs font-semibold text-text-muted uppercase tracking-wide">Ingresos Hoy</p>
+                <div class="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
+                    <i data-lucide="trending-up" class="w-4 h-4 text-green-600"></i>
+                </div>
+            </div>
+            <p id="kpi-hoy" class="text-2xl font-bold text-text-main font-mono">S/ 0.00</p>
+            <p class="text-xs text-text-muted mt-1">pagos confirmados hoy</p>
+        </div>
+
+        <div class="kpi-card bg-white rounded-xl border border-border p-4">
+            <div class="flex items-center justify-between mb-3">
+                <p class="text-xs font-semibold text-text-muted uppercase tracking-wide">Esta Semana</p>
+                <div class="w-8 h-8 rounded-lg bg-[#38bdf8]/10 flex items-center justify-center">
+                    <i data-lucide="calendar-days" class="w-4 h-4 text-[#38bdf8]"></i>
+                </div>
+            </div>
+            <p id="kpi-semana" class="text-2xl font-bold text-text-main font-mono">S/ 0.00</p>
+            <p class="text-xs text-text-muted mt-1">&uacute;ltimos 7 d&iacute;as</p>
+        </div>
+
+        <div class="kpi-card bg-white rounded-xl border border-border p-4">
+            <div class="flex items-center justify-between mb-3">
+                <p class="text-xs font-semibold text-text-muted uppercase tracking-wide">Este Mes</p>
+                <div class="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center">
+                    <i data-lucide="bar-chart-2" class="w-4 h-4 text-purple-600"></i>
+                </div>
+            </div>
+            <p id="kpi-mes" class="text-2xl font-bold text-text-main font-mono">S/ 0.00</p>
+            <p class="text-xs text-text-muted mt-1">&uacute;ltimos 30 d&iacute;as</p>
+        </div>
+
+        <div class="kpi-card bg-white rounded-xl border border-border p-4">
+            <div class="flex items-center justify-between mb-3">
+                <p class="text-xs font-semibold text-text-muted uppercase tracking-wide">Veh&iacute;culos Pagados</p>
+                <div class="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
+                    <i data-lucide="car" class="w-4 h-4 text-amber-600"></i>
+                </div>
+            </div>
+            <p id="kpi-total" class="text-2xl font-bold text-text-main font-mono">0</p>
+            <p class="text-xs text-text-muted mt-1">total acumulado</p>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex items-center gap-1 bg-slate-100 rounded-xl p-1 w-fit">
+        <button id="tab-pagos" onclick="switchTab('pagos')" class="tab-btn active px-4 py-2 text-sm font-semibold rounded-lg">
+            Pagos Recientes
+        </button>
+        <button id="tab-tarifas" onclick="switchTab('tarifas')" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg text-text-sub hover:text-text-main">
+            Configurar Tarifas
+        </button>
+    </div>
+
+    <!-- ─── PANEL: Pagos Recientes ─── -->
+    <div id="panel-pagos" class="fade-in">
+        <div class="bg-white rounded-xl border border-border overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-border">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="credit-card" class="w-4 h-4 text-[#38bdf8]"></i>
+                    <h3 class="font-semibold text-text-main text-sm">Historial de Pagos</h3>
+                </div>
+                <button onclick="cargarPagos()" class="text-xs text-[#38bdf8] hover:underline flex items-center gap-1">
+                    <i data-lucide="refresh-cw" class="w-3 h-3"></i> Actualizar
+                </button>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-border">
+                            <th class="text-left px-5 py-3 text-xs font-semibold text-text-muted uppercase tracking-wide">Placa</th>
+                            <th class="text-left px-4 py-3 text-xs font-semibold text-text-muted uppercase tracking-wide">Entrada</th>
+                            <th class="text-left px-4 py-3 text-xs font-semibold text-text-muted uppercase tracking-wide">Salida</th>
+                            <th class="text-left px-4 py-3 text-xs font-semibold text-text-muted uppercase tracking-wide">Duraci&oacute;n</th>
+                            <th class="text-right px-5 py-3 text-xs font-semibold text-text-muted uppercase tracking-wide">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-pagos">
+                        <tr>
+                            <td colspan="5" class="px-5 py-10 text-center text-text-muted text-sm">
+                                <div class="flex flex-col items-center gap-2">
+                                    <i data-lucide="loader-2" class="w-5 h-5 animate-spin text-[#38bdf8]"></i>
+                                    Cargando pagos...
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── PANEL: Configurar Tarifas ─── -->
+    <div id="panel-tarifas" class="hidden fade-in">
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+
+            <!-- Lista de tarifas -->
+            <div class="bg-white rounded-xl border border-border overflow-hidden">
+                <div class="flex items-center justify-between px-5 py-4 border-b border-border">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="list" class="w-4 h-4 text-[#38bdf8]"></i>
+                        <h3 class="font-semibold text-text-main text-sm">Tarifas Vigentes</h3>
+                    </div>
+                    <button onclick="cargarTarifas()" class="text-xs text-[#38bdf8] hover:underline flex items-center gap-1">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i> Actualizar
+                    </button>
+                </div>
+                <div id="lista-tarifas" class="divide-y divide-border">
+                    <div class="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-2">
+                        <i data-lucide="loader-2" class="w-5 h-5 animate-spin text-[#38bdf8]"></i>
+                        Cargando tarifas...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulario nueva / editar tarifa -->
+            <div class="bg-white rounded-xl border border-border overflow-hidden">
+                <div class="flex items-center justify-between px-5 py-4 border-b border-border">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="plus-circle" class="w-4 h-4 text-[#38bdf8]"></i>
+                        <h3 id="form-titulo" class="font-semibold text-text-main text-sm">Nueva Tarifa</h3>
+                    </div>
+                    <button id="btn-cancelar-edicion" onclick="cancelarEdicion()" class="hidden text-xs text-text-muted hover:text-text-main">
+                        Cancelar edici&oacute;n
+                    </button>
+                </div>
+                <form id="form-tarifa" class="p-5 space-y-4" onsubmit="guardarTarifa(event)">
+                    <input type="hidden" id="tarifa-id" value="">
+                    <div>
+                        <label class="block text-xs font-semibold text-text-sub mb-1.5">Descripci&oacute;n</label>
+                        <input type="text" id="tarifa-desc" placeholder="Ej: Primera hora, Hora adicional..."
+                               class="w-full px-3 py-2.5 text-sm rounded-lg border border-border bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#38bdf8]/30 focus:border-[#38bdf8] transition-all">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-text-sub mb-1.5">Minutos desde</label>
+                            <input type="number" id="tarifa-desde" min="0" placeholder="0"
+                                   class="w-full px-3 py-2.5 text-sm rounded-lg border border-border bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#38bdf8]/30 focus:border-[#38bdf8] transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-text-sub mb-1.5">Minutos hasta <span class="font-normal text-text-muted">(vacío = sin límite)</span></label>
+                            <input type="number" id="tarifa-hasta" min="0" placeholder="60"
+                                   class="w-full px-3 py-2.5 text-sm rounded-lg border border-border bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#38bdf8]/30 focus:border-[#38bdf8] transition-all">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-text-sub mb-1.5">Precio (S/)</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm font-semibold">S/</span>
+                            <input type="number" id="tarifa-precio" step="0.50" min="0" placeholder="5.00"
+                                   class="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-border bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#38bdf8]/30 focus:border-[#38bdf8] transition-all">
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="tarifa-activo" checked
+                               class="w-4 h-4 accent-[#38bdf8]">
+                        <label for="tarifa-activo" class="text-sm text-text-sub">Tarifa activa</label>
+                    </div>
+                    <button type="submit"
+                            class="w-full py-2.5 text-sm font-semibold rounded-lg bg-[#38bdf8] text-white hover:bg-[#0ea5e9] transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="save" class="w-4 h-4"></i>
+                        <span id="btn-guardar-texto">Guardar Tarifa</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // ─── Tabs ────────────────────────────────────────────
+    function switchTab(tab) {
+        document.getElementById('panel-pagos').classList.toggle('hidden', tab !== 'pagos');
+        document.getElementById('panel-tarifas').classList.toggle('hidden', tab !== 'tarifas');
+        document.getElementById('tab-pagos').classList.toggle('active', tab === 'pagos');
+        document.getElementById('tab-tarifas').classList.toggle('active', tab === 'tarifas');
+        document.getElementById('tab-pagos').classList.toggle('text-text-sub', tab !== 'pagos');
+        document.getElementById('tab-tarifas').classList.toggle('text-text-sub', tab !== 'tarifas');
+        if (tab === 'tarifas') cargarTarifas();
+    }
+
+    // ─── KPIs ────────────────────────────────────────────
+    function cargarKPIs() {
+        fetch('/admin/reportes')
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('kpi-hoy').textContent    = 'S/ ' + d.ingresos_hoy.toFixed(2);
+                document.getElementById('kpi-semana').textContent = 'S/ ' + d.ingresos_semana.toFixed(2);
+                document.getElementById('kpi-mes').textContent    = 'S/ ' + d.ingresos_mes.toFixed(2);
+                document.getElementById('kpi-total').textContent  = d.total_vehiculos;
+            })
+            .catch(() => {});
+    }
+
+    // ─── Pagos Recientes ─────────────────────────────────
+    function cargarPagos() {
+        fetch('/admin/historial')
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('tabla-pagos');
+                const pagados = data.filter(m => m.pagado);
+                if (!pagados.length) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="px-5 py-10 text-center text-text-muted text-sm">
+                        <div class="flex flex-col items-center gap-2">
+                            <i data-lucide="inbox" class="w-5 h-5"></i>
+                            Sin pagos registrados a&uacute;n
+                        </div></td></tr>`;
+                    lucide.createIcons();
+                    return;
+                }
+                tbody.innerHTML = pagados.map(m => `
+                    <tr class="border-b border-border hover:bg-slate-50 transition-colors">
+                        <td class="px-5 py-3">
+                            <span class="font-mono font-bold text-text-main tracking-wider">${m.placa}</span>
+                        </td>
+                        <td class="px-4 py-3 text-xs text-text-sub">${m.hora_entrada}</td>
+                        <td class="px-4 py-3 text-xs text-text-sub">${m.hora_salida || '<span class="text-amber-600">En curso</span>'}</td>
+                        <td class="px-4 py-3 text-xs text-text-sub">${m.duracion || '—'}</td>
+                        <td class="px-5 py-3 text-right">
+                            <span class="font-mono font-bold text-green-600">S/ ${m.monto.toFixed(2)}</span>
+                        </td>
+                    </tr>
+                `).join('');
+                lucide.createIcons();
+            })
+            .catch(() => {
+                document.getElementById('tabla-pagos').innerHTML =
+                    '<tr><td colspan="5" class="px-5 py-6 text-center text-red-500 text-sm">Error al cargar pagos</td></tr>';
+            });
+    }
+
+    // ─── Tarifas ─────────────────────────────────────────
+    function cargarTarifas() {
+        fetch('/admin/tarifas')
+            .then(r => r.json())
+            .then(data => {
+                const container = document.getElementById('lista-tarifas');
+                if (!data.length) {
+                    container.innerHTML = `<div class="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-2">
+                        <i data-lucide="tag" class="w-5 h-5"></i>
+                        Sin tarifas configuradas
+                    </div>`;
+                    lucide.createIcons();
+                    return;
+                }
+                container.innerHTML = data.map(t => `
+                    <div class="flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors">
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-semibold text-text-main truncate">${t.descripcion || 'Sin descripción'}</p>
+                            <p class="text-xs text-text-muted">
+                                ${t.minutos_desde}min → ${t.minutos_hasta !== null ? t.minutos_hasta + 'min' : '∞'}
+                                &nbsp;&bull;&nbsp;
+                                <span class="${t.activo ? 'text-green-600' : 'text-slate-400'}">${t.activo ? 'Activa' : 'Inactiva'}</span>
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-3 ml-4 shrink-0">
+                            <span class="font-mono font-bold text-[#38bdf8] text-base">S/ ${t.precio.toFixed(2)}</span>
+                            <div class="flex gap-1">
+                                <button onclick="editarTarifa(${t.id})" title="Editar"
+                                        class="w-7 h-7 rounded-lg flex items-center justify-center text-text-muted hover:bg-[#38bdf8]/10 hover:text-[#38bdf8] transition-colors">
+                                    <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                                </button>
+                                <button onclick="eliminarTarifa(${t.id})" title="Eliminar"
+                                        class="w-7 h-7 rounded-lg flex items-center justify-center text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                lucide.createIcons();
+            })
+            .catch(() => {
+                document.getElementById('lista-tarifas').innerHTML =
+                    '<div class="p-6 text-center text-red-500 text-sm">Error al cargar tarifas</div>';
+            });
+    }
+
+    function editarTarifa(id) {
+        fetch('/admin/tarifa/' + id)
+            .then(r => r.json())
+            .then(t => {
+                document.getElementById('tarifa-id').value    = t.id;
+                document.getElementById('tarifa-desc').value  = t.descripcion || '';
+                document.getElementById('tarifa-desde').value = t.minutos_desde;
+                document.getElementById('tarifa-hasta').value = t.minutos_hasta ?? '';
+                document.getElementById('tarifa-precio').value = t.precio;
+                document.getElementById('tarifa-activo').checked = t.activo;
+                document.getElementById('form-titulo').textContent = 'Editar Tarifa';
+                document.getElementById('btn-guardar-texto').textContent = 'Actualizar Tarifa';
+                document.getElementById('btn-cancelar-edicion').classList.remove('hidden');
+            });
+    }
+
+    function cancelarEdicion() {
+        document.getElementById('form-tarifa').reset();
+        document.getElementById('tarifa-id').value = '';
+        document.getElementById('tarifa-activo').checked = true;
+        document.getElementById('form-titulo').textContent = 'Nueva Tarifa';
+        document.getElementById('btn-guardar-texto').textContent = 'Guardar Tarifa';
+        document.getElementById('btn-cancelar-edicion').classList.add('hidden');
+    }
+
+    function guardarTarifa(e) {
+        e.preventDefault();
+        const id      = document.getElementById('tarifa-id').value;
+        const payload = {
+            descripcion:    document.getElementById('tarifa-desc').value.trim(),
+            minutos_desde:  parseInt(document.getElementById('tarifa-desde').value) || 0,
+            minutos_hasta:  document.getElementById('tarifa-hasta').value ? parseInt(document.getElementById('tarifa-hasta').value) : null,
+            precio:         parseFloat(document.getElementById('tarifa-precio').value) || 0,
+            activo:         document.getElementById('tarifa-activo').checked
+        };
+
+        const url    = id ? `/admin/tarifa/${id}` : '/admin/tarifa';
+        const method = id ? 'PUT' : 'POST';
+
+        fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success !== false) { cancelarEdicion(); cargarTarifas(); }
+                else alert('Error: ' + (d.error || 'No se pudo guardar'));
+            })
+            .catch(() => alert('Error de red'));
+    }
+
+    function eliminarTarifa(id) {
+        if (!confirm('¿Eliminar esta tarifa?')) return;
+        fetch('/admin/tarifa/' + id, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(d => { if (d.success) cargarTarifas(); })
+            .catch(() => alert('Error al eliminar'));
+    }
+
+    // ─── Init ─────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+        cargarKPIs();
+        cargarPagos();
+    });
+</script>
+{% endblock %}
