@@ -370,8 +370,11 @@
                 document.getElementById('empty-state').classList.add('hidden');
                 document.getElementById('resultado-container').classList.remove('hidden');
                 document.getElementById('placa-registrada').textContent = placa;
-                if (data.qr_base64)
-                    document.getElementById('qr-imagen').src = 'data:image/png;base64,' + data.qr_base64;
+                if (data.qr_base64) {
+                    document.getElementById('qr-imagen').src = data.qr_base64.startsWith('data:')
+                        ? data.qr_base64
+                        : 'data:image/png;base64,' + data.qr_base64;
+                }
                 // Auto-reset después de 5 segundos
                 setTimeout(resetearMonitoreo, 5000);
             } else {

@@ -224,7 +224,7 @@
       <p class="qr-instruccion">
         <strong>IMPORTANTE:</strong> Guarda este código QR. Deberás mostrarlo al personal de caja al momento de pagar tu estacionamiento.
       </p>
-      <img src="data:image/png;base64,{{ qr_base64 }}" alt="QR Code" class="qr-image" id="qr-image">
+      <img src="{% if qr_base64 and qr_base64.startswith('data:') %}{{ qr_base64 }}{% else %}data:image/png;base64,{{ qr_base64 }}{% endif %}" alt="QR Code" class="qr-image" id="qr-image">
       
       <div style="margin-top: 20px;">
         <button onclick="descargarQR()" class="btn-primary btn-download">💾 Descargar QR</button>

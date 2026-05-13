@@ -134,6 +134,10 @@
                     <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                     En línea
                 </div>
+                <a href="{{ url_for('main.logout') }}" class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-border text-text-sub hover:text-red-600 hover:border-red-200 transition-colors">
+                    <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                    Salir
+                </a>
                 {% block header_actions %}{% endblock %}
             </div>
         </header>

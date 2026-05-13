@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Centinela Vehicular</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            background: #020617;
+        }
+
+        .layout-container {
+            display: flex;
+            min-height: 100vh;
+            width: 100%;
+        }
+
+        .sidebar {
+            width: 32%;
+            min-width: 400px;
+            background: linear-gradient(180deg, #051935 0%, #020b18 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: white;
+            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+            position: relative;
+        }
+
+        .logo-container {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .app-logo {
+            width: 200px;
+            max-width: 70vw;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+            margin-bottom: 10px;
+        }
+
+        .main-title {
+            text-align: center;
+            font-size: 32px;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 40px;
+            letter-spacing: 2px;
+            text-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .login-form {
+            width: 100%;
+            max-width: 320px;
+        }
+
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            display: block;
+            color: #ffffff;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .input-container {
+            position: relative;
+        }
+
+        .input-container i.main-icon {
+            position: absolute;
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+        }
+
+        .input-container input {
+            width: 100%;
+            padding: 15px 44px 15px 48px;
+            border-radius: 12px;
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+            outline: none;
+            transition: all 0.3s ease;
+            font-size: 15px;
+        }
+
+        .input-container input:focus {
+            border-color: #38bdf8;
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+        }
+
+        ::placeholder {
+            color: #64748b;
+            opacity: 0.9;
+        }
+
+        .toggle-pass {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .toggle-pass:hover {
+            color: #ffffff;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(90deg, #0ea5e9, #2563eb);
+            color: white;
+            font-weight: 800;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+            margin-top: 10px;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6);
+            filter: brightness(1.1);
+        }
+
+        .alert {
+            width: 100%;
+            max-width: 320px;
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            color: #fecaca;
+            font-size: 13px;
+        }
+
+        .main-view {
+            flex: 1;
+            background-image: url("{{ url_for('static', filename='img/fondo-centinela.png') }}");
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+
+        .main-view::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, rgba(2, 11, 24, 0.85) 0%, rgba(2, 11, 24, 0.12) 100%);
+        }
+
+        @media (max-width: 820px) {
+            body {
+                overflow: auto;
+            }
+
+            .layout-container {
+                min-height: 100vh;
+            }
+
+            .sidebar {
+                width: 100%;
+                min-width: 0;
+                padding: 32px 22px;
+            }
+
+            .main-view {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="layout-container">
+        <div class="sidebar">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='img/logo-centinela.png') }}" alt="Logo Centinela" class="app-logo">
+            </div>
+
+            <h1 class="main-title">BIENVENIDOS</h1>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form class="login-form" method="post" onsubmit="login(event)">
+                <div class="input-group">
+                    <label for="userInput">Usuario</label>
+                    <div class="input-container">
+                        <i class="fa-regular fa-user main-icon"></i>
+                        <input type="text" id="userInput" name="usuario" placeholder="Nombre de usuario" required autofocus>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="passwordField">Contrasena</label>
+                    <div class="input-container">
+                        <i class="fa-solid fa-lock main-icon"></i>
+                        <input type="password" id="passwordField" name="password" placeholder="********" required>
+                        <i class="fa-regular fa-eye toggle-pass" id="togglePass"></i>
+                    </div>
+                </div>
+
+                <button class="btn-submit" type="submit" id="loginBtn">Acceder</button>
+            </form>
+        </div>
+
+        <div class="main-view"></div>
+    </div>
+
+    <script>
+        const togglePass = document.getElementById('togglePass');
+        const passwordField = document.getElementById('passwordField');
+
+        togglePass.addEventListener('click', function() {
+            const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordField.setAttribute('type', type);
+            this.classList.toggle('fa-eye');
+            this.classList.toggle('fa-eye-slash');
+        });
+
+        function login(event) {
+            const btn = document.getElementById('loginBtn');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
+            btn.style.opacity = '0.7';
+            btn.style.pointerEvents = 'none';
+        }
+    </script>
+</body>
+</html>

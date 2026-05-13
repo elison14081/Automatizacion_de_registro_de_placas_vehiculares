@@ -1,12 +1,20 @@
 import cv2
-from ultralytics import YOLO
-import easyocr
 import numpy as np
 from flask import current_app
 import os
 import re
 from datetime import datetime, timedelta
 import threading
+
+try:
+    from ultralytics import YOLO
+except ImportError:
+    YOLO = None
+
+try:
+    import easyocr
+except ImportError:
+    easyocr = None
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CENTINELA VEHICULAR — Motor ALPR Perú v2.0
@@ -17,8 +25,27 @@ import threading
 class OCRService:
     def __init__(self):
         modelo_path = current_app.config.get('YOLO_MODEL_PATH', 'best.pt')
-        self.modelo = YOLO(modelo_path)
-        self.reader = easyocr.Reader(['en'], gpu=False)
+        self.disponible = YOLO is not None and easyocr is not None
+        self.error_dependencias = None
+        self.modelo = None
+        self.reader = None
+
+        if not self.disponible:
+            faltantes = []
+            if YOLO is None:
+                faltantes.append('ultralytics')
+            if easyocr is None:
+                faltantes.append('easyocr')
+            self.error_dependencias = (
+                'Faltan dependencias de OCR: ' + ', '.join(faltantes) +
+                '. Instale requirements.txt para habilitar deteccion automatica.'
+            )
+        elif not os.path.exists(modelo_path):
+            self.disponible = False
+            self.error_dependencias = f'No se encontro el modelo YOLO: {modelo_path}'
+        else:
+            self.modelo = YOLO(modelo_path)
+            self.reader = easyocr.Reader(['en'], gpu=False)
         self.lock = threading.Lock()
         self.cap = None
         self.fuente_camara = None
@@ -75,6 +102,8 @@ class OCRService:
         
     def detectar_placa_desde_imagen(self, imagen_path):
         """Detecta placa desde archivo de imagen"""
+        if not self.disponible:
+            return None
         frame = cv2.imread(imagen_path)
         if frame is None:
             return None
@@ -83,6 +112,8 @@ class OCRService:
     
     def detectar_placa_desde_array(self, imagen_array):
         """Detecta placa desde array numpy (imagen en memoria)"""
+        if not self.disponible:
+            return None
         res = self._procesar_frame(imagen_array)
         return res['plate_text'] if res and res['plate_text'] != 'INVALID_PLATE' else None
     
@@ -228,6 +259,9 @@ class OCRService:
     
     def _procesar_frame(self, frame):
         """Pipeline principal: YOLO Detection → Geometry → OCR → Validation"""
+        if not self.disponible:
+            return None
+
         with self.lock:
             resultados = self.modelo(
                 frame,
@@ -445,6 +479,14 @@ class OCRService:
                 
         if frame is None:
             return None, None
+
+        if not self.disponible:
+            mensaje = self.error_dependencias or "OCR no disponible"
+            cv2.putText(frame, "Camara activa - OCR no disponible", (20, 35),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2)
+            cv2.putText(frame, mensaje[:80], (20, 65),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, (220, 220, 220), 1)
+            return frame, None
             
         # ═══ DETECCIÓN EN DOS FASES ═══
         # Fase 1: YOLO (siempre dibuja rectángulo si detecta algo)
@@ -633,6 +675,9 @@ class OCRService:
     
     def capturar_placa(self):
         """Retorna la última placa validada del caché o captura una nueva (JSON)"""
+        if not self.disponible:
+            return None
+
         # Si tenemos una placa válida en el caché de los últimos 3 segundos, la usamos
         if self.ultima_placa and self.tiempo_ultima_placa:
             if datetime.now() - self.tiempo_ultima_placa < timedelta(seconds=3):

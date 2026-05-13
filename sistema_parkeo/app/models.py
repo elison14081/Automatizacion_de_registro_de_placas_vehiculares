@@ -1,5 +1,6 @@
 from . import db
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
 class Movimiento(db.Model):
     __tablename__ = 'movimientos'
@@ -43,3 +44,22 @@ class Configuracion(db.Model):
     clave = db.Column(db.String(50), unique=True, nullable=False)
     valor = db.Column(db.String(255), nullable=False)
     descripcion = db.Column(db.String(200), nullable=True)
+
+class Usuario(db.Model):
+    __tablename__ = 'usuarios'
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    rol = db.Column(db.String(20), default='operador')  # 'admin' u 'operador'
+    activo = db.Column(db.Boolean, default=True)
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def __repr__(self):
+        return f'<Usuario {self.username} ({self.rol})>'

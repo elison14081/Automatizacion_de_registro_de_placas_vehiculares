@@ -1,17 +1,65 @@
-from flask import Blueprint, render_template, request, jsonify, Response, current_app, flash, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, Response, current_app, flash, redirect, url_for, session
 from werkzeug.utils import secure_filename
 import os
 import cv2
 import numpy as np
 from datetime import datetime
 from app import db
-from app.models import Movimiento, Tarifa
+from app.models import Movimiento, Tarifa, Usuario
 from app.ocr_service import OCRService
 from app.qr_service import QRService
 from sqlalchemy import func
 from datetime import timedelta
 
 bp = Blueprint('main', __name__)
+
+@bp.before_request
+def requerir_login():
+    rutas_publicas = {'main.login', 'main.ver_ticket'}
+    if request.endpoint in rutas_publicas:
+        return None
+
+    if not session.get('logueado'):
+        if request.method == 'GET':
+            return redirect(url_for('main.login', next=request.path))
+        return jsonify({'success': False, 'error': 'Sesion no iniciada'}), 401
+
+    return None
+
+@bp.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        usuario = request.form.get('usuario', '').strip()
+        password = request.form.get('password', '').strip()
+
+        if not usuario or not password:
+            flash('Ingrese usuario y contraseña.', 'error')
+            return redirect(url_for('main.login'))
+
+        user_db = Usuario.query.filter_by(username=usuario).first()
+        if user_db is None or not user_db.check_password(password):
+            flash('Usuario o contraseña incorrectos.', 'error')
+            return redirect(url_for('main.login'))
+
+        if not user_db.activo:
+            flash('El usuario está inactivo.', 'error')
+            return redirect(url_for('main.login'))
+
+        session['logueado'] = True
+        session['usuario'] = user_db.username
+        session['rol'] = user_db.rol
+        destino = request.args.get('next') or url_for('main.index')
+        return redirect(destino)
+
+    if session.get('logueado'):
+        return redirect(url_for('main.index'))
+
+    return render_template('login.html')
+
+@bp.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('main.login'))
 
 # ─ Normalización de placa con tolerancia OCR ───────────────────────
 
