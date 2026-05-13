@@ -237,7 +237,7 @@
         📱 Tu Código QR de Estacionamiento
       </p>
       <div class="qr-code">
-        <img src="data:image/png;base64,{{ qr_base64 }}" alt="Código QR">
+        <img src="{% if qr_base64 and qr_base64.startswith('data:') %}{{ qr_base64 }}{% else %}data:image/png;base64,{{ qr_base64 }}{% endif %}" alt="Código QR">
       </div>
       <p style="color: #999; margin-top: 15px; font-size: 13px;">
         Muestra este código al salir del estacionamiento

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, Response, current_app, flash, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, Response, current_app, flash, redirect, url_for, session
 from werkzeug.utils import secure_filename
 import os
 import cv2
@@ -12,6 +12,44 @@ from sqlalchemy import func
 from datetime import timedelta
 
 bp = Blueprint('main', __name__)
+
+@bp.before_request
+def requerir_login():
+    rutas_publicas = {'main.login', 'main.ver_ticket'}
+    if request.endpoint in rutas_publicas:
+        return None
+
+    if not session.get('logueado'):
+        if request.method == 'GET':
+            return redirect(url_for('main.login', next=request.path))
+        return jsonify({'success': False, 'error': 'Sesion no iniciada'}), 401
+
+    return None
+
+@bp.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        usuario = request.form.get('usuario', '').strip()
+        password = request.form.get('password', '').strip()
+
+        if not usuario or not password:
+            flash('Ingrese usuario y contrasena.', 'error')
+            return redirect(url_for('main.login'))
+
+        session['logueado'] = True
+        session['usuario'] = usuario
+        destino = request.args.get('next') or url_for('main.index')
+        return redirect(destino)
+
+    if session.get('logueado'):
+        return redirect(url_for('main.index'))
+
+    return render_template('login.html')
+
+@bp.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('main.login'))
 
 # ─ Normalización de placa con tolerancia OCR ───────────────────────
 
@@ -117,6 +155,59 @@ def cobros():
 def tarifas():
     """Página dedicada de gestión de tarifas"""
     return render_template('tarifas.html')
+
+@bp.route('/estacionamiento')
+def estacionamiento():
+    """Mapa visual de espacios de estacionamiento."""
+    espacios_base = {
+        'Zona A': ['A1', 'A2', 'A3', 'A4', 'A5'],
+        'Zona B': ['B1', 'B2', 'B3', 'B4'],
+    }
+
+    activos = Movimiento.query.filter_by(hora_salida=None) \
+        .order_by(Movimiento.hora_entrada.asc()) \
+        .all()
+
+    espacios_planos = [
+        espacio_id
+        for espacios in espacios_base.values()
+        for espacio_id in espacios
+    ]
+    movimientos_por_espacio = {
+        espacio_id: activos[idx]
+        for idx, espacio_id in enumerate(espacios_planos)
+        if idx < len(activos)
+    }
+
+    zonas = []
+    for nombre, espacios in espacios_base.items():
+        zonas.append({
+            'nombre': nombre,
+            'espacios': [
+                {
+                    'id': espacio_id,
+                    'movimiento': movimientos_por_espacio.get(espacio_id),
+                    'ocupado': espacio_id in movimientos_por_espacio,
+                }
+                for espacio_id in espacios
+            ]
+        })
+
+    total = len(espacios_planos)
+    ocupados = min(len(activos), total)
+    disponibles = max(total - ocupados, 0)
+    porcentaje = int((ocupados / total) * 100) if total else 0
+    excedentes = max(len(activos) - total, 0)
+
+    return render_template(
+        'estacionamiento.html',
+        zonas=zonas,
+        total=total,
+        ocupados=ocupados,
+        disponibles=disponibles,
+        porcentaje=porcentaje,
+        excedentes=excedentes,
+    )
 
 @bp.route('/configuracion')
 def configuracion():

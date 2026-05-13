@@ -18,7 +18,7 @@ with app.app_context():
         ]
         db.session.add_all(tarifas)
         db.session.commit()
-        print("✓ Tarifas insertadas")
+        print("[OK] Tarifas insertadas")
     
     # Verificar si ya existe configuración
     if Configuracion.query.count() == 0:
@@ -31,8 +31,8 @@ with app.app_context():
         ]
         db.session.add_all(configs)
         db.session.commit()
-        print("✓ Configuración insertada")
+        print("[OK] Configuracion insertada")
     
-    print("\n✅ Base de datos inicializada correctamente")
+    print("\n[OK] Base de datos inicializada correctamente")
     print(f"Tarifas registradas: {Tarifa.query.count()}")
     print(f"Configuraciones registradas: {Configuracion.query.count()}")
