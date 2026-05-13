@@ -306,6 +306,7 @@
     let scanning = false;
     let scanInterval;
     let isChecking = false;
+    let isWaitingForImmobilization = false;
     // Cooldown: evita que la placa recién registrada active checkout inmediatamente
     let _cooldownPlaca = null;
     let _cooldownHasta = 0;
@@ -336,7 +337,7 @@
     }
 
     function checkPlate() {
-        if (!scanning || isChecking) return;
+        if (!scanning || isChecking || isWaitingForImmobilization) return;
         isChecking = true;
         fetch('{{ url_for("main.capturar_placa") }}', { method: 'POST' })
             .then(r => { if (!r.ok) throw new Error(); return r.json(); })
@@ -344,12 +345,65 @@
                 if (data.success && data.placa) {
                     // Si la placa está en cooldown, ignorarla silenciosamente
                     if (_enCooldown(data.placa)) { isChecking = false; return; }
-                    stopScanning();
-                    registerPlate(data.placa, data.confianza);
+                    
+                    // Vehículo detectado, iniciar espera de 8 segundos
+                    isWaitingForImmobilization = true;
+                    clearInterval(scanInterval);
+                    mostrarMensajeEspera();
+                    
+                    setTimeout(() => {
+                        capturarPlacaDefinitiva();
+                    }, 8000);
                 }
             })
             .catch(() => {})
             .finally(() => { isChecking = false; });
+    }
+
+    function capturarPlacaDefinitiva() {
+        fetch('{{ url_for("main.capturar_placa") }}', { method: 'POST' })
+            .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+            .then(data => {
+                isWaitingForImmobilization = false;
+                ocultarMensajeEspera();
+                
+                if (data.success && data.placa) {
+                    if (_enCooldown(data.placa)) { 
+                        scanInterval = setInterval(checkPlate, 3000);
+                        return; 
+                    }
+                    stopScanning();
+                    registerPlate(data.placa, data.confianza);
+                } else {
+                    // No detectó placa después de los 8s (se fue o no se lee)
+                    scanInterval = setInterval(checkPlate, 3000);
+                }
+            })
+            .catch(() => {
+                isWaitingForImmobilization = false;
+                ocultarMensajeEspera();
+                scanInterval = setInterval(checkPlate, 3000);
+            });
+    }
+
+    function mostrarMensajeEspera() {
+        const indicator = document.getElementById('scan-indicator');
+        indicator.classList.remove('bg-black/60');
+        indicator.classList.add('bg-amber-500/80');
+        indicator.innerHTML = `
+            <div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            Enfocando placa (8s)...
+        `;
+    }
+
+    function ocultarMensajeEspera() {
+        const indicator = document.getElementById('scan-indicator');
+        indicator.classList.add('bg-black/60');
+        indicator.classList.remove('bg-amber-500/80');
+        indicator.innerHTML = `
+            <div class="w-3 h-3 border-2 border-[#38bdf8] border-t-transparent rounded-full animate-spin"></div>
+            Analizando
+        `;
     }
 
     function registerPlate(placa, confianza) {
@@ -375,8 +429,12 @@
                         ? data.qr_base64
                         : 'data:image/png;base64,' + data.qr_base64;
                 }
-                // Auto-reset después de 5 segundos
-                setTimeout(resetearMonitoreo, 5000);
+                // Mostrar resultado por 5s, luego activar pausa de 25s
+                setTimeout(() => {
+                    document.getElementById('resultado-container').classList.add('hidden');
+                    document.getElementById('empty-state').classList.remove('hidden');
+                    iniciarPausaGlobal(25);
+                }, 5000);
             } else {
                 alert('Error al registrar: ' + (data.error || 'Error desconocido'));
                 startScanning();
@@ -477,7 +535,7 @@
     function cerrarBoleta() {
         document.getElementById('modal-boleta').classList.add('hidden');
         _movimientoIdActual = null;
-        startScanning();
+        iniciarPausaGlobal(15);
     }
 
     function pagarYSalir() {
@@ -501,7 +559,7 @@
         .then(salidaData => {
             document.getElementById('modal-boleta').classList.add('hidden');
             _movimientoIdActual = null;
-            resetearMonitoreo();
+            iniciarPausaGlobal(30);
         })
         .catch(err => {
             alert('Error al procesar el pago: ' + err.message);
@@ -511,11 +569,47 @@
         });
     }
 
-    // ─ Reset del panel de monitoreo ──────────────────────
+    // ─ Reset del panel de monitoreo y Pausas ─────────────────
     function resetearMonitoreo() {
         document.getElementById('resultado-container').classList.add('hidden');
         document.getElementById('empty-state').classList.remove('hidden');
+        
+        const indicator = document.getElementById('scan-indicator');
+        if (indicator) {
+            indicator.classList.add('bg-black/60');
+            indicator.classList.remove('bg-red-500/80', 'bg-amber-500/80');
+            indicator.innerHTML = `
+                <div class="w-3 h-3 border-2 border-[#38bdf8] border-t-transparent rounded-full animate-spin"></div>
+                Analizando
+            `;
+        }
         startScanning();
+    }
+
+    function iniciarPausaGlobal(segundos) {
+        document.getElementById('video-stream').style.opacity = '0.6';
+        const indicator = document.getElementById('scan-indicator');
+        indicator.classList.remove('hidden', 'bg-black/60', 'bg-amber-500/80');
+        indicator.classList.add('bg-red-500/80');
+        
+        let quedan = segundos;
+        function updateUI() {
+            indicator.innerHTML = `
+                <div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Pausa de seguridad (${quedan}s)...
+            `;
+        }
+        updateUI();
+        
+        const timer = setInterval(() => {
+            quedan--;
+            if (quedan <= 0) {
+                clearInterval(timer);
+                resetearMonitoreo();
+            } else {
+                updateUI();
+            }
+        }, 1000);
     }
 
     document.getElementById('btn-forzar-scan').addEventListener('click', () => {

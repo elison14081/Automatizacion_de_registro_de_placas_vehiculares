@@ -95,7 +95,7 @@ class OCRService:
             'A': '4',
         }
         self.FE_NUMERO_A_LETRA = {
-            '0': 'O', '1': 'I', '2': 'Z',
+            '0': 'D', '1': 'L', '2': 'Z',
             '5': 'S', '8': 'B', '6': 'G',
             '4': 'A', '3': 'J',
         }
@@ -168,29 +168,55 @@ class OCRService:
     # ═══════════════════════════════════════════════════════════════════
     
     def _corregir_fe_schrift(self, texto_raw):
-        """Aplica corrección de caracteres FE-Schrift al texto OCR.
-        
-        Formato peruano estándar: LLL-NNN (3 letras + guión + 3 números)
-        Las posiciones 0-2 deben ser LETRAS, las posiciones 3-5 deben ser NÚMEROS.
-        """
+        """Aplica corrección de caracteres FE-Schrift al texto OCR con reglas peruanas avanzadas."""
         texto = ''.join(filter(str.isalnum, texto_raw)).upper()
         
         if len(texto) < 5:
             return texto
             
-        # Si tiene exactamente 6 caracteres, aplicar corrección posicional
         if len(texto) == 6:
             corregido = list(texto)
             
-            # Posiciones 0-2: deberían ser LETRAS
-            for i in range(3):
-                if corregido[i].isdigit():
-                    corregido[i] = self.FE_NUMERO_A_LETRA.get(corregido[i], corregido[i])
+            # Formato Moto: 1234AB (Empieza con 2 o más números)
+            if corregido[0].isdigit() and corregido[1].isdigit():
+                # Posiciones 0-3 deberían ser números
+                for i in range(4):
+                    if corregido[i].isalpha():
+                        corregido[i] = self.FE_LETRA_A_NUMERO.get(corregido[i], corregido[i])
+                # Posiciones 4-5 deberían ser letras
+                for i in range(4, 6):
+                    if corregido[i].isdigit():
+                        corregido[i] = self.FE_NUMERO_A_LETRA.get(corregido[i], corregido[i])
             
-            # Posiciones 3-5: deberían ser NÚMEROS
-            for i in range(3, 6):
-                if corregido[i].isalpha():
-                    corregido[i] = self.FE_LETRA_A_NUMERO.get(corregido[i], corregido[i])
+            # Formato Auto Antiguo: AB1234 (Pos 0,1 letras, Pos 2-5 números)
+            elif corregido[2].isdigit() and corregido[3].isdigit():
+                for i in range(2):
+                    if corregido[i].isdigit():
+                        corregido[i] = self.FE_NUMERO_A_LETRA.get(corregido[i], corregido[i])
+                for i in range(2, 6):
+                    if corregido[i].isalpha():
+                        corregido[i] = self.FE_LETRA_A_NUMERO.get(corregido[i], corregido[i])
+            
+            # Formato Auto Nuevo: ABC123 o A1B234
+            else:
+                # Posición 0: Siempre LETRA
+                if corregido[0].isdigit():
+                    corregido[0] = self.FE_NUMERO_A_LETRA.get(corregido[0], corregido[0])
+                
+                # Posición 1: Puede ser letra o número.
+                # Si el OCR leyó 'I' o 'O', en Perú es casi seguro 1 o 0
+                if corregido[1] == 'I': corregido[1] = '1'
+                if corregido[1] == 'O': corregido[1] = '0'
+                if corregido[1] == 'Q': corregido[1] = '0'
+                
+                # Posición 2: Siempre LETRA
+                if corregido[2].isdigit():
+                    corregido[2] = self.FE_NUMERO_A_LETRA.get(corregido[2], corregido[2])
+                
+                # Posiciones 3, 4, 5: Siempre NÚMEROS
+                for i in range(3, 6):
+                    if corregido[i].isalpha():
+                        corregido[i] = self.FE_LETRA_A_NUMERO.get(corregido[i], corregido[i])
             
             return ''.join(corregido)
         
@@ -200,7 +226,8 @@ class OCRService:
         """Validación y clasificación de placa peruana con corrección FE-Schrift."""
         texto_limpio = ''.join(filter(str.isalnum, texto)).upper()
         
-        if len(texto_limpio) < 4:
+        # Requisito estricto: solo registrar placas de exactamente 6 caracteres
+        if len(texto_limpio) != 6:
             return "INVALID_PLATE", "UNKNOWN"
         
         # Intentar corrección FE-Schrift
@@ -222,11 +249,8 @@ class OCRService:
         elif self.regex_moto1.match(texto_limpio) or self.regex_moto2.match(texto_limpio):
             return texto_limpio, "MOTO"
         
-        # Aceptar texto si tiene longitud razonable (para pruebas)
-        if len(texto_corregido) >= 5:
-            return texto_corregido, "DETECTADO"
-            
-        return "INVALID_PLATE", "UNKNOWN"
+        # Si todo falla pero tiene exactamente 6, se acepta
+        return texto_corregido, "DETECTADO"
     
     # ═══════════════════════════════════════════════════════════════════
     # STAGE 3: Validación Geométrica de Detección
@@ -292,12 +316,13 @@ class OCRService:
                 if not es_placa:
                     continue
                 
-                # Padding adaptativo según tipo de vehículo
-                pad_x = int(box_w * 0.08)
-                pad_y = int(box_h * 0.12)
+                # Recortar la parte superior para eliminar la palabra "PERU"
+                crop_top = int(box_h * 0.18)
+                pad_x = int(box_w * 0.05)
+                pad_y = int(box_h * 0.05)
                 
                 nx1 = max(0, x1 - pad_x)
-                ny1 = max(0, y1 - pad_y)
+                ny1 = max(0, y1 + crop_top) # Sumamos para bajar el techo del ROI
                 nx2 = min(w, x2 + pad_x)
                 ny2 = min(h, y2 + pad_y)
                 
@@ -552,10 +577,11 @@ class OCRService:
                 print(f"[GEOM] OK: ratio={ratio:.2f} tipo={tipo_vehiculo}")
                 
                 # ── FASE 2: OCR ──
-                pad_x = int(box_w * 0.08)
-                pad_y = int(box_h * 0.12)
+                crop_top = int(box_h * 0.18)
+                pad_x = int(box_w * 0.05)
+                pad_y = int(box_h * 0.05)
                 nx1 = max(0, x1 - pad_x)
-                ny1 = max(0, y1 - pad_y)
+                ny1 = max(0, y1 + crop_top) # Evitar texto superior
                 nx2 = min(w, x2 + pad_x)
                 ny2 = min(h, y2 + pad_y)
                 

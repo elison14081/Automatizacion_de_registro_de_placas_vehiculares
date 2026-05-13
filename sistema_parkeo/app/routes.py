@@ -63,7 +63,7 @@ def logout():
 
 # ─ Normalización de placa con tolerancia OCR ───────────────────────
 
-_OCR_EQUIV = str.maketrans('01lI', 'OOLI')   # 0→O, 1→O, l→L, I→I (normaliza)
+_OCR_EQUIV = str.maketrans('OIl', '011')   # O→0, I→1, l→1 (normaliza OCR común)
 
 def _normalizar(placa: str) -> str:
     """Normaliza una placa para comparación fuzzy."""
@@ -83,10 +83,11 @@ def _levenshtein(a: str, b: str) -> int:
         prev = curr
     return prev[-1]
 
-def buscar_placa_activa_similar(placa_ocr: str, umbral: int = 2):
+def buscar_placa_activa_similar(placa_ocr: str, umbral: int = 1):
     """
     Busca un movimiento activo cuya placa sea similar a placa_ocr
     (distancia Levenshtein ≤ umbral sobre versiones normalizadas).
+    Solo compara placas de la misma longitud para evitar falsos positivos.
     Retorna (movimiento, placa_bd) o (None, None).
     """
     norm_ocr = _normalizar(placa_ocr)
@@ -94,7 +95,12 @@ def buscar_placa_activa_similar(placa_ocr: str, umbral: int = 2):
     mejor = None
     mejor_dist = umbral + 1
     for m in activos:
-        dist = _levenshtein(norm_ocr, _normalizar(m.placa))
+        norm_bd = _normalizar(m.placa)
+        # Rechazar inmediatamente si la longitud es distinta
+        if len(norm_ocr) != len(norm_bd):
+            continue
+            
+        dist = _levenshtein(norm_ocr, norm_bd)
         if dist < mejor_dist:
             mejor_dist = dist
             mejor = m
